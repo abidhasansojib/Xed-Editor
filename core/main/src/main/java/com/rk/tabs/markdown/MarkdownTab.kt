@@ -23,16 +23,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -40,13 +37,13 @@ import com.rk.activities.main.MainViewModel
 import com.rk.activities.main.session.MarkdownPreviewTabState
 import com.rk.activities.main.session.TabState
 import com.rk.file.FileObject
+import com.rk.icons.Menu_book
+import com.rk.icons.XedIcons
 import com.rk.lsp.MarkdownImageProvider
-import com.rk.resources.drawables
 import com.rk.resources.strings
 import com.rk.tabs.base.Tab
 import io.github.rosemoe.sora.lsp.editor.text.SimpleMarkdownRenderer
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -59,11 +56,10 @@ class MarkdownTab(
     val viewModel: MainViewModel,
 ) : Tab() {
     override val name: String = "Markdown preview"
-    override val icon: ImageVector? = null
+    override val icon: ImageVector
+        get() = XedIcons.Menu_book
     override var title: String by mutableStateOf(file.getName())
     override val showGlobalActions: Boolean = true
-
-    private var refreshKey by mutableIntStateOf(0)
 
     init {
         MarkdownImageProvider.register()
@@ -157,19 +153,21 @@ class MarkdownTab(
                         mutableStateOf<CharSequence?>(null)
                     }
 
-                    LaunchedEffect(markdownText) {
+                    LaunchedEffect(markdownText, refreshKey) {
                         val text = markdownText ?: ""
                         val cleanMd = removeUnsupportedHtmlTags(text)
                         try {
-                            SimpleMarkdownRenderer.renderAsync(
-                                cleanMd,
-                                boldColor = primaryColor,
-                                inlineCodeColor = primaryColor,
-                                codeTypeface = Typeface.MONOSPACE,
-                                linkColor = primaryColor,
-                            ) { spanned ->
-                                renderedSpanned = spanned
-                            }
+                            val spanned =
+                                withContext(Dispatchers.Default) {
+                                    SimpleMarkdownRenderer.renderAsync(
+                                        cleanMd,
+                                        boldColor = primaryColor,
+                                        inlineCodeColor = primaryColor,
+                                        codeTypeface = Typeface.MONOSPACE,
+                                        linkColor = primaryColor,
+                                    )
+                                }
+                            renderedSpanned = spanned
                         } catch (_: Exception) {
                             renderedSpanned = text
                         }
