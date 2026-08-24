@@ -2,18 +2,17 @@ package com.rk.runner.runners.web.markdown
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
+import com.rk.activities.main.MainActivity
 import com.rk.file.BuiltinFileType
 import com.rk.file.FileObject
 import com.rk.icons.Icon
 import com.rk.resources.getString
 import com.rk.resources.strings
 import com.rk.runner.FileRunner
-import com.rk.runner.runners.web.html.HtmlRunner
-import java.lang.ref.WeakReference
-
-var mdViewerRef = WeakReference<MDViewer?>(null)
-var toPreviewFile: FileObject? = null
+import com.rk.tabs.editor.EditorTab
+import com.rk.tabs.markdown.MarkdownTab
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object MarkdownRunner : FileRunner() {
 
@@ -27,28 +26,24 @@ object MarkdownRunner : FileRunner() {
     }
 
     override suspend fun run(activity: Activity, fileObject: FileObject) {
-        val intent = Intent(activity, MDViewer::class.java)
-        toPreviewFile = fileObject
-        activity.startActivity(intent)
+        val mainActivity = MainActivity.instance ?: (activity as? MainActivity) ?: return
+        val viewModel = mainActivity.viewModel
+
+        withContext(Dispatchers.Main) {
+            val currentTab = viewModel.tabManager.currentTab
+            val projectRoot = (currentTab as? EditorTab)?.projectRoot
+            val markdownTab = MarkdownTab(fileObject, projectRoot, viewModel)
+
+            if (currentTab is EditorTab && currentTab.file?.getAbsolutePath() == fileObject.getAbsolutePath()) {
+                currentTab.quickSave()
+                viewModel.tabManager.replaceTab(currentTab, markdownTab)
+            } else {
+                viewModel.tabManager.openTab(markdownTab)
+            }
+        }
     }
 
     override fun getIcon(context: Context): Icon? {
         return BuiltinFileType.MARKDOWN.icon
-    }
-
-    override suspend fun isRunning(): Boolean {
-        return mdViewerRef.get() != null
-    }
-
-    override suspend fun stop() {
-        HtmlRunner.httpServer?.let {
-            it.closeAllConnections()
-            if (it.isAlive) {
-                it.stop()
-            }
-        }
-        HtmlRunner.httpServer = null
-        mdViewerRef.get()?.finish()
-        mdViewerRef = WeakReference(null)
     }
 }
