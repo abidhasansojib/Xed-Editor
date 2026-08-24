@@ -39,6 +39,10 @@ object TabRegistry {
             return registeredTabs[ext]!!.createTab(file, projectRoot, viewModel)
         }
 
+        if (com.rk.settings.Settings.default_markdown_preview && type == BuiltinFileType.MARKDOWN) {
+            return com.rk.tabs.markdown.MarkdownTab(file, projectRoot, viewModel)
+        }
+
         return when (type) {
             BuiltinFileType.IMAGE -> ImageTab(file)
             else -> viewModel.editorManager.createEditorTab(file, projectRoot, readOnly, customTitle)

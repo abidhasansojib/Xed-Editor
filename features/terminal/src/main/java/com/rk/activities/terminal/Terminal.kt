@@ -212,6 +212,11 @@ class Terminal : AppCompatActivity() {
 
         LaunchedEffect(Unit) {
             try {
+                if (Settings.use_ssh_terminal) {
+                    installNextStage = NEXT_STAGE.NONE
+                    return@LaunchedEffect
+                }
+
                 val abi = Build.SUPPORTED_ABIS
 
                 val filesToDownload = mutableListOf<DownloadFile>()

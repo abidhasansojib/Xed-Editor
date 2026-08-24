@@ -248,6 +248,13 @@ fun SettingsEditorScreen(navController: NavController) {
             )
 
             EditorSettingsItem(
+                label = stringResource(strings.default_markdown_preview),
+                description = stringResource(strings.default_markdown_preview_desc),
+                default = Settings.default_markdown_preview,
+                sideEffect = { Settings.default_markdown_preview = it },
+            )
+
+            EditorSettingsItem(
                 label = stringResource(strings.complete_on_enter),
                 description = stringResource(strings.complete_on_enter_desc),
                 default = Settings.complete_on_enter,

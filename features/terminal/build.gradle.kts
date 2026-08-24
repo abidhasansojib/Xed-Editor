@@ -42,6 +42,7 @@ dependencies {
     implementation(libs.utilcode)
     implementation(libs.okhttp)
     implementation(libs.nanohttpd)
+    implementation(libs.jsch)
     implementation(libs.androidx.browser)
     implementation(libs.gson)
     implementation(libs.semver)

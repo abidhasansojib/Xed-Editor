@@ -29,6 +29,36 @@ object MkSession {
         sessionId: String,
         isExtraction: Boolean = false,
     ): Pair<TerminalSession, SessionPwd> {
+        if (Settings.use_ssh_terminal) {
+            val config = com.rk.terminal.ssh.SSHConfig.loadFromSettings()
+            val workingDir = if (config.isConfigured()) {
+                "ssh://${config.username}@${config.host}:${config.port}"
+            } else {
+                "ssh://unconfigured"
+            }
+
+            val env = arrayOf(
+                "TERM=xterm-256color",
+                "COLORTERM=truecolor",
+                "LANG=C.UTF-8",
+            )
+
+            val session =
+                TerminalSession(
+                    "/system/bin/sh",
+                    context.filesDir.absolutePath,
+                    arrayOf("-c", "cat"),
+                    env,
+                    Settings.terminal_scrollback_buffer,
+                    sessionClient,
+                )
+
+            val bridge = com.rk.terminal.ssh.SSHTerminalBridge(context, session, sessionClient, sessionId)
+            com.rk.terminal.ssh.SSHTerminalBridgeRegistry.register(sessionId, bridge)
+
+            return session to workingDir
+        }
+
         val envVariables =
             mapOf(
                 "ANDROID_ART_ROOT" to System.getenv("ANDROID_ART_ROOT"),

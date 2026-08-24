@@ -698,6 +698,26 @@ open class EditorTab(
 
     @Composable
     override fun RowScope.Actions() {
+        val currentFile = file
+        if (currentFile != null && FileTypeManager.fromExtension(currentFile.getExtension()) == com.rk.file.BuiltinFileType.MARKDOWN) {
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        quickSave()
+                        val markdownTab = com.rk.tabs.markdown.MarkdownTab(currentFile, projectRoot, viewModel)
+                        viewModel.tabManager.replaceTab(this@EditorTab, markdownTab)
+                    }
+                },
+                modifier = androidx.compose.ui.Modifier.size(48.dp),
+            ) {
+                Icon(
+                    painter = painterResource(drawables.eye),
+                    contentDescription = stringResource(strings.preview_mode),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
         EditorToolbarActions(viewModel = viewModel)
     }
 

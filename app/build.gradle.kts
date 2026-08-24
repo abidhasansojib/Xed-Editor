@@ -52,21 +52,31 @@ android {
                 }
 
             val propertiesFile = File(propertiesFilePath)
-            if (propertiesFile.exists()) {
-                val properties = Properties()
-                properties.load(propertiesFile.inputStream())
-                keyAlias = properties["keyAlias"] as String?
-                keyPassword = properties["keyPassword"] as String?
-                storeFile =
-                    if (isGitHubActions) {
-                        File("/tmp/xed.keystore")
-                    } else {
-                        (properties["storeFile"] as String?)?.let { File(it) }
-                    }
+            val isCustomConfigValid =
+                if (propertiesFile.exists() && propertiesFile.length() > 0) {
+                    val properties = Properties()
+                    properties.load(propertiesFile.inputStream())
+                    keyAlias = properties["keyAlias"] as String?
+                    keyPassword = properties["keyPassword"] as String?
+                    val targetStoreFile =
+                        if (isGitHubActions) {
+                            File("/tmp/xed.keystore")
+                        } else {
+                            (properties["storeFile"] as String?)?.let { File(it) }
+                        }
+                    storeFile = targetStoreFile
+                    storePassword = properties["storePassword"] as String?
+                    targetStoreFile != null && targetStoreFile.exists() && targetStoreFile.length() > 0 && !keyAlias.isNullOrBlank()
+                } else {
+                    false
+                }
 
-                storePassword = properties["storePassword"] as String?
-            } else {
-                println("Signing properties file not found at $propertiesFilePath")
+            if (!isCustomConfigValid) {
+                println("Signing properties or keystore not found/empty at $propertiesFilePath, falling back to testkey")
+                storeFile = file(layout.buildDirectory.dir("../testkey.keystore"))
+                storePassword = "testkey"
+                keyAlias = "testkey"
+                keyPassword = "testkey"
             }
         }
         getByName("debug") {

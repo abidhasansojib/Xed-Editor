@@ -143,6 +143,8 @@ object Settings {
     var auto_closing_bracket by CachedPreference("auto_closing_bracket", true)
     var confirm_exit by CachedPreference("confirm_exit", true)
     var terminal_clipboard_keybindings by CachedPreference("terminal_clipboard_keybindings", true)
+    var use_ssh_terminal by CachedPreference("use_ssh_terminal", false)
+    var default_markdown_preview by CachedPreference("default_markdown_preview", true)
     private var _record_rpc by CachedPreference("record_rpc", BuildConfig.DEBUG)
     var record_rpc: Boolean
         get() = FeatureRegistry.isEnabled("debug_mode") && _record_rpc
@@ -169,6 +171,7 @@ object Settings {
     var terminal_scrollback_buffer by CachedPreference("terminal_scrollback_buffer", 5000)
     var auto_save_delay by CachedPreference("auto_save_delay", 400L)
     var lsp_log_limit by CachedPreference("lsp_log_limit", 5000)
+    var ssh_port by CachedPreference("ssh_port", 22)
 
     var user_declined_value by CachedPreference("user_declined_value", false)
     var user_said_maybe_later by CachedPreference("user_said_maybe_later", false)
@@ -199,6 +202,10 @@ object Settings {
     var git_name by CachedPreference("git_name", "")
     var git_email by CachedPreference("git_email", "")
     var git_conflict_detection by CachedPreference("git_conflict_detection", true)
+    var ssh_host by CachedPreference("ssh_host", "")
+    var ssh_username by CachedPreference("ssh_username", "")
+    var ssh_auth_type by CachedPreference("ssh_auth_type", "password")
+    var ssh_key_path by CachedPreference("ssh_key_path", "")
     var excluded_files_search by
         CachedPreference("excluded_files_search", DEFAULT_EXCLUDED_FILES_SEARCH.joinToString("\n"))
     var excluded_files_drawer by

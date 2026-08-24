@@ -49,3 +49,14 @@ data class EditorTabState(
 data class FileTabState(val fileObject: FileObject) : TabState {
     override suspend fun toTab() = TabRegistry.getTab(fileObject, null, MainActivity.instance!!.viewModel, false, null)
 }
+
+data class MarkdownPreviewTabState(
+    val fileObject: FileObject,
+    val projectRoot: FileObject? = null,
+) : TabState {
+    override suspend fun toTab(): Tab? {
+        if (!fileObject.exists() && !fileObject.canRead()) return null
+        val vm = MainActivity.instance?.viewModel ?: return null
+        return com.rk.tabs.markdown.MarkdownTab(fileObject, projectRoot, vm)
+    }
+}

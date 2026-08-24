@@ -143,6 +143,13 @@ fun RunnerSettings(modifier: Modifier = Modifier, navController: NavController) 
         )
 
         PreferenceGroup(heading = stringResource(strings.built_in)) {
+            SettingsItem(
+                label = stringResource(strings.default_markdown_preview),
+                description = stringResource(strings.default_markdown_preview_desc),
+                default = Settings.default_markdown_preview,
+                sideEffect = { Settings.default_markdown_preview = it },
+            )
+
             builtinRunners.forEach { runner ->
                 SettingsItem(
                     label = runner.label,

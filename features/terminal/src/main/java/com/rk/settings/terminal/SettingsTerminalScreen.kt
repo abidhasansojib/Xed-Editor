@@ -21,6 +21,7 @@ import com.rk.components.NextScreenCard
 import com.rk.components.PreferenceList
 import com.rk.components.RoundedValueSlider
 import com.rk.components.SettingsItem
+import com.rk.components.SingleInputDialog
 import com.rk.components.SteppedValueSlider
 import com.rk.components.compose.preferences.base.PreferenceGroup
 import com.rk.components.compose.preferences.base.PreferenceLayout
@@ -71,35 +72,293 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
         val context = LocalContext.current
         val activity = LocalActivity.current as? AppCompatActivity
 
-        PreferenceGroup(heading = stringResource(strings.advanced)) {
-            if (FeatureRegistry.isEnabled("debug_mode")) {
+        var showHostDialog by remember { mutableStateOf(false) }
+        var hostValue by remember { mutableStateOf(Settings.ssh_host) }
+        var hostError by remember { mutableStateOf<String?>(null) }
+
+        var showPortDialog by remember { mutableStateOf(false) }
+        var portValue by remember { mutableStateOf(Settings.ssh_port.toString()) }
+        var portError by remember { mutableStateOf<String?>(null) }
+
+        var showUsernameDialog by remember { mutableStateOf(false) }
+        var usernameValue by remember { mutableStateOf(Settings.ssh_username) }
+        var usernameError by remember { mutableStateOf<String?>(null) }
+
+        var showPasswordDialog by remember { mutableStateOf(false) }
+        var passwordValue by remember { mutableStateOf("") }
+
+        var showKeyDialog by remember { mutableStateOf(false) }
+        var keyValue by remember { mutableStateOf("") }
+
+        var showPassphraseDialog by remember { mutableStateOf(false) }
+        var passphraseValue by remember { mutableStateOf("") }
+
+        var hasPassword by remember { mutableStateOf(com.rk.terminal.ssh.SSHSecureStorage.hasPassword()) }
+        var hasPrivateKey by remember { mutableStateOf(com.rk.terminal.ssh.SSHSecureStorage.hasPrivateKey()) }
+
+        PreferenceGroup(heading = stringResource(strings.use_ssh_terminal)) {
+            var useSSHState by remember { mutableStateOf(Settings.use_ssh_terminal) }
+            PreferenceSwitch(
+                checked = useSSHState,
+                onCheckedChange = {
+                    Settings.use_ssh_terminal = it
+                    useSSHState = it
+                },
+                label = stringResource(strings.use_ssh_terminal),
+                description = stringResource(strings.use_ssh_terminal_desc),
+            )
+
+            if (useSSHState) {
                 SettingsItem(
-                    label = stringResource(strings.failsafe_mode),
-                    description = stringResource(strings.failsafe_mode_desc),
-                    default = !Settings.sandbox,
-                    sideEffect = { Settings.sandbox = !it },
+                    label = stringResource(strings.ssh_host),
+                    description = if (Settings.ssh_host.isNotBlank()) Settings.ssh_host else stringResource(strings.ssh_host_desc),
+                    showSwitch = false,
+                    default = false,
+                    onClick = {
+                        hostValue = Settings.ssh_host
+                        hostError = null
+                        showHostDialog = true
+                    },
+                )
+
+                SettingsItem(
+                    label = stringResource(strings.ssh_port),
+                    description = Settings.ssh_port.toString(),
+                    showSwitch = false,
+                    default = false,
+                    onClick = {
+                        portValue = Settings.ssh_port.toString()
+                        portError = null
+                        showPortDialog = true
+                    },
+                )
+
+                SettingsItem(
+                    label = stringResource(strings.ssh_username),
+                    description = if (Settings.ssh_username.isNotBlank()) Settings.ssh_username else stringResource(strings.ssh_username_desc),
+                    showSwitch = false,
+                    default = false,
+                    onClick = {
+                        usernameValue = Settings.ssh_username
+                        usernameError = null
+                        showUsernameDialog = true
+                    },
+                )
+
+                PreferenceList(
+                    label = stringResource(strings.ssh_auth_type),
+                    description = null,
+                    items =
+                        listOf(
+                            "password" to stringResource(strings.ssh_auth_password),
+                            "key" to stringResource(strings.ssh_auth_key),
+                        ),
+                    selectedItem = Settings.ssh_auth_type,
+                    onItemSelected = { Settings.ssh_auth_type = it },
+                )
+
+                if (Settings.ssh_auth_type == "password") {
+                    SettingsItem(
+                        label = stringResource(strings.ssh_password),
+                        description = if (hasPassword) stringResource(strings.ssh_password_set) else stringResource(strings.ssh_password_not_set),
+                        showSwitch = false,
+                        default = false,
+                        onClick = {
+                            passwordValue = ""
+                            showPasswordDialog = true
+                        },
+                    )
+                } else {
+                    SettingsItem(
+                        label = stringResource(strings.ssh_private_key),
+                        description = if (hasPrivateKey) stringResource(strings.ssh_private_key_set) else stringResource(strings.ssh_private_key_not_set),
+                        showSwitch = false,
+                        default = false,
+                        onClick = {
+                            keyValue = com.rk.terminal.ssh.SSHSecureStorage.getPrivateKey()
+                            showKeyDialog = true
+                        },
+                    )
+
+                    SettingsItem(
+                        label = stringResource(strings.ssh_key_passphrase),
+                        description = stringResource(strings.ssh_key_passphrase_desc),
+                        showSwitch = false,
+                        default = false,
+                        onClick = {
+                            passphraseValue = ""
+                            showPassphraseDialog = true
+                        },
+                    )
+                }
+
+                SettingsItem(
+                    label = stringResource(strings.ssh_test_connection),
+                    description = stringResource(strings.ssh_test_connection_desc),
+                    showSwitch = false,
+                    default = false,
+                    onClick = {
+                        val config = com.rk.terminal.ssh.SSHConfig.loadFromSettings()
+                        if (!config.isConfigured()) {
+                            toast(strings.ssh_missing_config)
+                            return@SettingsItem
+                        }
+
+                        val loading = LoadingPopup(activity, null)
+                        loading.show()
+
+                        GlobalScope.launch(Dispatchers.IO) {
+                            val result = com.rk.terminal.ssh.SSHConnection.testConnection(config)
+                            withContext(Dispatchers.Main) {
+                                loading.hide()
+                                result.fold(
+                                    onSuccess = { toast(strings.ssh_connection_success) },
+                                    onFailure = {
+                                        dialogRes(
+                                            activity = activity,
+                                            title = strings.error.getString(),
+                                            msg = strings.ssh_connection_failed.getString().format(it.message ?: "Unknown error"),
+                                            okRes = strings.ok,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    },
                 )
             }
+        }
 
-            PreferenceList(
-                label = "SECCOMP",
-                description = stringResource(strings.seccomp_desc),
-                items =
-                    listOf(
-                        "unspecified" to stringResource(strings.seccomp_unspecified),
-                        "no" to stringResource(strings.seccomp_no_seccomp),
-                        "yes" to stringResource(strings.seccomp_seccomp),
-                    ),
-                selectedItem = Settings.seccomp_mode,
-                onItemSelected = { Settings.seccomp_mode = it },
+        if (showHostDialog) {
+            SingleInputDialog(
+                title = stringResource(strings.ssh_host),
+                inputLabel = stringResource(strings.ssh_host),
+                inputValue = hostValue,
+                errorMessage = hostError,
+                confirmEnabled = hostValue.isNotBlank(),
+                onInputValueChange = {
+                    hostValue = it
+                    hostError = if (it.isBlank()) strings.value_invalid.getString() else null
+                },
+                onConfirm = { Settings.ssh_host = hostValue.trim() },
+                onFinish = { showHostDialog = false },
             )
+        }
 
-            NextScreenCard(
-                label = stringResource(strings.terminal_health),
-                description = stringResource(strings.terminal_health_desc),
-                navController = overrideNavController ?: settingsNavController.get(),
-                route = SettingsRoutes.TerminalCheck,
+        if (showPortDialog) {
+            SingleInputDialog(
+                title = stringResource(strings.ssh_port),
+                inputLabel = stringResource(strings.ssh_port),
+                inputValue = portValue,
+                errorMessage = portError,
+                confirmEnabled = portValue.isNotBlank(),
+                onInputValueChange = {
+                    portValue = it
+                    val port = it.toIntOrNull()
+                    portError = if (port == null || port !in 1..65535) strings.invalid_port.getString() else null
+                },
+                onConfirm = { Settings.ssh_port = portValue.toInt() },
+                onFinish = { showPortDialog = false },
             )
+        }
+
+        if (showUsernameDialog) {
+            SingleInputDialog(
+                title = stringResource(strings.ssh_username),
+                inputLabel = stringResource(strings.ssh_username),
+                inputValue = usernameValue,
+                errorMessage = usernameError,
+                confirmEnabled = usernameValue.isNotBlank(),
+                onInputValueChange = {
+                    usernameValue = it
+                    usernameError = if (it.isBlank()) strings.value_invalid.getString() else null
+                },
+                onConfirm = { Settings.ssh_username = usernameValue.trim() },
+                onFinish = { showUsernameDialog = false },
+            )
+        }
+
+        if (showPasswordDialog) {
+            SingleInputDialog(
+                title = stringResource(strings.ssh_password),
+                inputLabel = stringResource(strings.ssh_password),
+                inputValue = passwordValue,
+                confirmEnabled = true,
+                onInputValueChange = { passwordValue = it },
+                onConfirm = {
+                    com.rk.terminal.ssh.SSHSecureStorage.setPassword(passwordValue)
+                    hasPassword = com.rk.terminal.ssh.SSHSecureStorage.hasPassword()
+                },
+                onFinish = { showPasswordDialog = false },
+            )
+        }
+
+        if (showKeyDialog) {
+            SingleInputDialog(
+                title = stringResource(strings.ssh_private_key),
+                inputLabel = stringResource(strings.ssh_private_key),
+                inputValue = keyValue,
+                confirmEnabled = true,
+                onInputValueChange = { keyValue = it },
+                onConfirm = {
+                    com.rk.terminal.ssh.SSHSecureStorage.setPrivateKey(keyValue.trim())
+                    hasPrivateKey = com.rk.terminal.ssh.SSHSecureStorage.hasPrivateKey()
+                },
+                onFinish = { showKeyDialog = false },
+            )
+        }
+
+        if (showPassphraseDialog) {
+            SingleInputDialog(
+                title = stringResource(strings.ssh_key_passphrase),
+                inputLabel = stringResource(strings.ssh_key_passphrase),
+                inputValue = passphraseValue,
+                confirmEnabled = true,
+                onInputValueChange = { passphraseValue = it },
+                onConfirm = { com.rk.terminal.ssh.SSHSecureStorage.setKeyPassphrase(passphraseValue) },
+                onFinish = { showPassphraseDialog = false },
+            )
+        }
+
+        PreferenceGroup(heading = stringResource(strings.advanced)) {
+            if (Settings.use_ssh_terminal) {
+                SettingsItem(
+                    label = stringResource(strings.failsafe_mode),
+                    description = stringResource(strings.ssh_proot_disabled_notice),
+                    default = false,
+                    showSwitch = false,
+                    sideEffect = {},
+                )
+            } else {
+                if (FeatureRegistry.isEnabled("debug_mode")) {
+                    SettingsItem(
+                        label = stringResource(strings.failsafe_mode),
+                        description = stringResource(strings.failsafe_mode_desc),
+                        default = !Settings.sandbox,
+                        sideEffect = { Settings.sandbox = !it },
+                    )
+                }
+
+                PreferenceList(
+                    label = "SECCOMP",
+                    description = stringResource(strings.seccomp_desc),
+                    items =
+                        listOf(
+                            "unspecified" to stringResource(strings.seccomp_unspecified),
+                            "no" to stringResource(strings.seccomp_no_seccomp),
+                            "yes" to stringResource(strings.seccomp_seccomp),
+                        ),
+                    selectedItem = Settings.seccomp_mode,
+                    onItemSelected = { Settings.seccomp_mode = it },
+                )
+
+                NextScreenCard(
+                    label = stringResource(strings.terminal_health),
+                    description = stringResource(strings.terminal_health_desc),
+                    navController = overrideNavController ?: settingsNavController.get(),
+                    route = SettingsRoutes.TerminalCheck,
+                )
+            }
         }
 
         PreferenceGroup(heading = stringResource(strings.appearance)) {
@@ -131,8 +390,17 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
         }
 
         PreferenceGroup(heading = stringResource(strings.user_data)) {
-            val restore =
-                rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (Settings.use_ssh_terminal) {
+                SettingsItem(
+                    label = stringResource(strings.uninstall),
+                    description = stringResource(strings.ssh_proot_disabled_notice),
+                    default = false,
+                    showSwitch = false,
+                    sideEffect = {},
+                )
+            } else {
+                val restore =
+                    rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                     if (uri == null) {
                         return@rememberLauncherForActivityResult
                     }
@@ -291,6 +559,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                     )
                 },
             )
+            }
         }
 
         PreferenceGroup(heading = stringResource(strings.other)) {

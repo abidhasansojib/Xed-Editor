@@ -64,6 +64,7 @@ class SessionService : Service() {
         }
 
         fun terminateSession(id: SessionId) {
+            com.rk.terminal.ssh.SSHTerminalBridgeRegistry.remove(id)
             sessions[id]?.apply {
                 if (emulator != null) {
                     sessions[id]?.finishIfRunning()
@@ -89,6 +90,11 @@ class SessionService : Service() {
             val session = sessions.remove(oldId) ?: return
             val pwd = sessionWorkDirs.remove(oldId) ?: return
 
+            val bridge = com.rk.terminal.ssh.SSHTerminalBridgeRegistry.remove(oldId)
+            if (bridge != null) {
+                com.rk.terminal.ssh.SSHTerminalBridgeRegistry.register(newId, bridge)
+            }
+
             sessions[newId] = session
             sessionWorkDirs[newId] = pwd
 
@@ -108,6 +114,7 @@ class SessionService : Service() {
     }
 
     override fun onDestroy() {
+        com.rk.terminal.ssh.SSHTerminalBridgeRegistry.removeAll()
         sessions.forEach { s -> s.value.finishIfRunning() }
 
         deamonRunning = false

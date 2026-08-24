@@ -297,6 +297,16 @@ private fun ColumnScope.TerminalView(
                 attachSession(session)
                 setTerminalViewClient(client)
 
+                if (Settings.use_ssh_terminal) {
+                    val currentSessionId =
+                        if (pendingCommand != null) pendingCommand!!.id
+                        else terminalActivity.sessionBinder?.get()?.getService()?.currentSession?.value ?: "main"
+                    com.rk.terminal.ssh.SSHTerminalBridgeRegistry.getBridge(currentSessionId)?.start(
+                        mEmulator?.mColumns ?: 80,
+                        mEmulator?.mRows ?: 24,
+                    )
+                }
+
                 // Legacy behavior
                 val fontFile = sandboxDir().child("etc/font.ttf")
                 if (fontFile.exists()) {
@@ -319,6 +329,15 @@ private fun ColumnScope.TerminalView(
                     val heightChanged = (bottom - top) != (oldBottom - oldTop)
 
                     if (widthChanged || heightChanged) {
+                        if (Settings.use_ssh_terminal && mEmulator != null) {
+                            val currentSessionId =
+                                terminalActivity.sessionBinder?.get()?.getService()?.currentSession?.value ?: "main"
+                            com.rk.terminal.ssh.SSHTerminalBridgeRegistry.getBridge(currentSessionId)?.resize(
+                                mEmulator.mColumns,
+                                mEmulator.mRows,
+                            )
+                        }
+
                         val terminalColors =
                             if (isDarkMode) {
                                 currentTheme.darkTerminalColors
@@ -518,6 +537,11 @@ fun Terminal.changeSession(sessionId: String) {
     session.updateTerminalSessionClient(client)
     terminalView.attachSession(session)
     terminalView.setTerminalViewClient(client)
+
+    if (Settings.use_ssh_terminal) {
+        val bridge = com.rk.terminal.ssh.SSHTerminalBridgeRegistry.getBridge(sessionId)
+        bridge?.start(terminalView.mEmulator?.mColumns ?: 80, terminalView.mEmulator?.mRows ?: 24)
+    }
 
     terminalView.apply {
         post {

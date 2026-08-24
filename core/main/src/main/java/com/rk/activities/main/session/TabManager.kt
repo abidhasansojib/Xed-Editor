@@ -54,6 +54,46 @@ class TabManager {
         }
     }
 
+    fun replaceTab(oldTab: Tab, newTab: Tab) {
+        val index = _tabs.indexOf(oldTab)
+        if (index == -1) {
+            addTab(newTab, switchToTab = true)
+            return
+        }
+
+        val isCurrent = (index == currentTabIndex)
+        if (isCurrent) {
+            oldTab.onTabUnselected()
+        }
+        oldTab.onTabRemoved()
+
+        _tabs[index] = newTab
+        selectionHistory.remove(oldTab)
+        selectionHistory.add(0, newTab)
+
+        newTab.onTabAdded()
+        if (isCurrent) {
+            newTab.onTabSelected()
+        }
+
+        DefaultScope.launch {
+            Events.publish(TabEvent.Closed(oldTab))
+            if (oldTab is EditorTab) {
+                Events.publish(EditorTabEvent.Closed(oldTab))
+            }
+            Events.publish(TabEvent.Opened(newTab))
+            if (newTab is EditorTab) {
+                Events.publish(EditorTabEvent.Opened(newTab))
+            }
+            if (isCurrent) {
+                Events.publish(TabEvent.Selected(newTab))
+                if (newTab is EditorTab) {
+                    Events.publish(EditorTabEvent.Selected(newTab))
+                }
+            }
+        }
+    }
+
     fun removeTab(index: Int) {
         if (index !in _tabs.indices) return
 
