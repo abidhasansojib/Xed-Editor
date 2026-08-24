@@ -36,8 +36,7 @@ import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
 
 /**
- * Standard AST-based GFM Markdown parser powered by [org.commonmark].
- * Compiles Markdown syntax trees into structured [MarkdownBlock]s.
+ * Standard AST-based Obsidian and GFM Markdown parser powered by [org.commonmark].
  */
 object MarkdownBlockParser {
 
@@ -71,7 +70,13 @@ object MarkdownBlockParser {
             }
 
             is FencedCodeBlock -> {
-                blocks.add(MarkdownBlock.CodeBlock(language = node.info ?: "", code = (node.literal ?: "").trimEnd()))
+                val lang = (node.info ?: "").trim()
+                val code = (node.literal ?: "").trimEnd()
+                if (lang.equals("math", ignoreCase = true)) {
+                    blocks.add(MarkdownBlock.MathBlock(expression = code))
+                } else {
+                    blocks.add(MarkdownBlock.CodeBlock(language = lang, code = code))
+                }
             }
 
             is IndentedCodeBlock -> {
@@ -122,12 +127,34 @@ object MarkdownBlockParser {
             }
 
             is Paragraph -> {
+                val raw = renderInlineText(node).trim()
+
+                // Check for block math: $$...$$
+                val mathMatch = Regex("^\\$\\$([\\s\\S]*)\\$\\$$").find(raw)
+                if (mathMatch != null) {
+                    blocks.add(MarkdownBlock.MathBlock(expression = mathMatch.groupValues[1].trim()))
+                    return
+                }
+
+                // Check for Footnote definition: [^1]: Text
+                val footnoteMatch = Regex("^\\[\\^([^\\]]+)\\]:\\s*(.*)$").find(raw)
+                if (footnoteMatch != null) {
+                    blocks.add(
+                        MarkdownBlock.Footnote(
+                            id = footnoteMatch.groupValues[1],
+                            text = footnoteMatch.groupValues[2],
+                        ),
+                    )
+                    return
+                }
+
+                // Check if paragraph contains only a standalone image
                 val first = node.firstChild
                 if (first is Image && first.next == null) {
                     val alt = renderInlineText(first)
                     blocks.add(MarkdownBlock.Image(alt = alt, url = first.destination ?: ""))
                 } else {
-                    blocks.add(MarkdownBlock.Paragraph(text = renderInlineText(node)))
+                    blocks.add(MarkdownBlock.Paragraph(text = raw))
                 }
             }
 
@@ -141,16 +168,30 @@ object MarkdownBlockParser {
 
     private fun parseBlockQuote(node: BlockQuote): MarkdownBlock {
         val rawText = renderInlineText(node).trim()
+        // Obsidian callout pattern: [!type(+/-)] Custom title
         val alertMatch =
-            Regex("^\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\]\\s*([\\s\\S]*)$", RegexOption.IGNORE_CASE)
+            Regex("^\\[!([a-zA-Z0-9_-]+)([+-])?\\]\\s*([^\\n]*)(?:\\n([\\s\\S]*))?$", RegexOption.IGNORE_CASE)
                 .find(rawText)
 
         if (alertMatch != null) {
             val typeStr = alertMatch.groupValues[1]
-            val alertType = AlertType.fromTag(typeStr) ?: AlertType.NOTE
-            val body = alertMatch.groupValues[2].trim()
+            val foldSymbol = alertMatch.groupValues[2]
+            val inlineTitle = alertMatch.groupValues[3].trim()
+            val body = alertMatch.groupValues[4].trim()
+
+            val alertType = AlertType.fromTag(typeStr)
+            val title = if (inlineTitle.isNotEmpty()) inlineTitle else alertType.defaultTitle
+            val isFoldable = foldSymbol.isNotEmpty()
+            val isDefaultFolded = foldSymbol == "-"
+
             val subBlocks = if (body.isNotEmpty()) parse(body) else emptyList()
-            return MarkdownBlock.Alert(type = alertType, title = alertType.label, content = subBlocks)
+            return MarkdownBlock.Alert(
+                type = alertType,
+                title = title,
+                isFoldable = isFoldable,
+                defaultFolded = isDefaultFolded,
+                content = subBlocks,
+            )
         }
 
         return MarkdownBlock.Blockquote(text = rawText)

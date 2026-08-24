@@ -4,7 +4,13 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +30,8 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Checkbox
@@ -69,7 +77,7 @@ import java.io.File
 import java.net.URLDecoder
 
 /**
- * Modern Jetpack Compose UI Renderer for Markdown content.
+ * Modern Jetpack Compose UI Renderer for Obsidian & GFM Markdown.
  */
 @Composable
 fun MarkdownView(
@@ -91,11 +99,14 @@ fun MarkdownView(
                 .build()
         }
 
+    val regularBlocks = remember(blocks) { blocks.filter { it !is MarkdownBlock.Footnote } }
+    val footnotes = remember(blocks) { blocks.filterIsInstance<MarkdownBlock.Footnote>() }
+
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        blocks.forEach { block ->
+        regularBlocks.forEach { block ->
             RenderBlock(
                 block = block,
                 currentFile = currentFile,
@@ -104,6 +115,27 @@ fun MarkdownView(
                 baseDirPath = baseDirPath,
                 imageLoader = imageLoader,
             )
+        }
+
+        if (footnotes.isNotEmpty()) {
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+            Text(
+                text = "Footnotes",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary,
+            )
+            footnotes.forEach { fn ->
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Text(
+                        text = "[${fn.id}]: ",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
+                    )
+                    RenderParagraph(fn.text, currentFile, projectRoot, viewModel)
+                }
+            }
         }
     }
 }
@@ -127,6 +159,8 @@ private fun RenderBlock(
         is MarkdownBlock.ListItem -> RenderListItem(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.TaskItem -> RenderTaskItem(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.Image -> RenderImage(block, baseDirPath, imageLoader)
+        is MarkdownBlock.MathBlock -> RenderMathBlock(block)
+        is MarkdownBlock.Footnote -> {}
         MarkdownBlock.HorizontalRule -> {
             HorizontalDivider(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
@@ -195,6 +229,11 @@ private fun RenderParagraph(
         onClick = { offset ->
             annotated.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let { annotation ->
                 handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
+                return@ClickableText
+            }
+            annotated.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                handleWikilinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
+                return@ClickableText
             }
         },
     )
@@ -222,7 +261,7 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = codeBlock.language.ifBlank { "TEXT" }.uppercase(),
+                    text = codeBlock.language.ifBlank { "CODE" }.uppercase(),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -276,6 +315,39 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
 }
 
 @Composable
+private fun RenderMathBlock(mathBlock: MarkdownBlock.MathBlock) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "MATH / EQUATION",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = mathBlock.expression,
+                style =
+                    MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center,
+                    ),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+@Composable
 private fun RenderAlert(
     alert: MarkdownBlock.Alert,
     currentFile: FileObject,
@@ -284,13 +356,19 @@ private fun RenderAlert(
     baseDirPath: String?,
     imageLoader: ImageLoader,
 ) {
+    var isExpanded by remember { mutableStateOf(!alert.defaultFolded) }
+
     val accentColor =
         when (alert.type) {
-            AlertType.NOTE -> Color(0xFF2196F3)
-            AlertType.TIP -> Color(0xFF4CAF50)
-            AlertType.IMPORTANT -> Color(0xFF9C27B0)
-            AlertType.WARNING -> Color(0xFFFF9800)
-            AlertType.CAUTION -> Color(0xFFF44336)
+            AlertType.NOTE, AlertType.INFO, AlertType.TODO -> Color(0xFF0288D1)
+            AlertType.TIP, AlertType.HINT, AlertType.IMPORTANT -> Color(0xFF00897B)
+            AlertType.SUCCESS, AlertType.CHECK, AlertType.DONE -> Color(0xFF43A047)
+            AlertType.QUESTION, AlertType.HELP, AlertType.FAQ -> Color(0xFFFB8C00)
+            AlertType.WARNING, AlertType.CAUTION, AlertType.ATTENTION -> Color(0xFFE64A19)
+            AlertType.FAILURE, AlertType.FAIL, AlertType.MISSING -> Color(0xFFD32F2F)
+            AlertType.DANGER, AlertType.ERROR, AlertType.BUG -> Color(0xFFC2185B)
+            AlertType.EXAMPLE -> Color(0xFF7B1FA2)
+            AlertType.QUOTE, AlertType.CITE -> Color(0xFF757575)
         }
 
     val containerColor = accentColor.copy(alpha = 0.08f)
@@ -301,45 +379,69 @@ private fun RenderAlert(
         shape = RoundedCornerShape(8.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.35f)),
     ) {
-        Row(modifier = Modifier.padding(14.dp)) {
-            // Left colored accent border line
-            Box(
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Header Row (Clickable if foldable)
+            Row(
                 modifier =
-                    Modifier.width(4.dp)
-                        .height(IntrinsicSize.Max)
-                        .background(accentColor, RoundedCornerShape(2.dp)),
-            )
+                    Modifier.fillMaxWidth()
+                        .then(if (alert.isFoldable) Modifier.clickable { isExpanded = !isExpanded } else Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Left colored accent border line
+                Box(
+                    modifier =
+                        Modifier.width(4.dp)
+                            .height(20.dp)
+                            .background(accentColor, RoundedCornerShape(2.dp)),
+                )
 
-            Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // Title Row
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    when (alert.type) {
-                        AlertType.NOTE -> Icon(Icons.Default.Info, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
-                        AlertType.TIP -> Icon(painterResource(drawables.bolt), alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
-                        AlertType.IMPORTANT -> Icon(Icons.Default.Star, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
-                        AlertType.WARNING -> Icon(Icons.Default.Warning, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
-                        AlertType.CAUTION -> Icon(painterResource(drawables.error), alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = alert.title,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = accentColor,
-                    )
+                when (alert.type) {
+                    AlertType.NOTE, AlertType.INFO, AlertType.TODO -> Icon(Icons.Default.Info, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                    AlertType.TIP, AlertType.HINT -> Icon(painterResource(drawables.bolt), alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                    AlertType.IMPORTANT -> Icon(Icons.Default.Star, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                    AlertType.SUCCESS, AlertType.CHECK, AlertType.DONE -> Icon(Icons.Default.Check, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                    AlertType.WARNING, AlertType.CAUTION, AlertType.ATTENTION -> Icon(Icons.Default.Warning, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                    else -> Icon(painterResource(drawables.error), alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
                 }
 
-                // Body content
-                alert.content.forEach { subBlock ->
-                    RenderBlock(
-                        block = subBlock,
-                        currentFile = currentFile,
-                        projectRoot = projectRoot,
-                        viewModel = viewModel,
-                        baseDirPath = baseDirPath,
-                        imageLoader = imageLoader,
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Text(
+                    text = alert.title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = accentColor,
+                    modifier = Modifier.weight(1f),
+                )
+
+                if (alert.isFoldable) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                        contentDescription = "Toggle callout",
+                        tint = accentColor,
+                        modifier = Modifier.size(22.dp),
                     )
+                }
+            }
+
+            // Body content with animation
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    alert.content.forEach { subBlock ->
+                        RenderBlock(
+                            block = subBlock,
+                            currentFile = currentFile,
+                            projectRoot = projectRoot,
+                            viewModel = viewModel,
+                            baseDirPath = baseDirPath,
+                            imageLoader = imageLoader,
+                        )
+                    }
                 }
             }
         }
@@ -603,7 +705,7 @@ private fun handleLinkClick(
         }
 
         url.startsWith("#") -> {
-            // Anchor link
+            // Heading anchor jump
         }
 
         else -> {
@@ -648,6 +750,59 @@ private fun handleLinkClick(
                         toast("Failed to open link: $url")
                     }
                 }
+            }
+        }
+    }
+}
+
+private fun handleWikilinkClick(
+    targetName: String,
+    currentFile: FileObject,
+    projectRoot: FileObject?,
+    viewModel: MainViewModel,
+    context: Context,
+) {
+    val cleanName = targetName.trim().substringBefore('#')
+    DefaultScope.launch(Dispatchers.IO) {
+        try {
+            var foundFile: File? = null
+
+            // 1. Check parent folder
+            val parentPath = currentFile.getParentFile()?.getAbsolutePath()
+            if (parentPath != null) {
+                val parentDir = File(parentPath)
+                val direct = File(parentDir, cleanName)
+                val directMd = File(parentDir, "$cleanName.md")
+                if (direct.exists()) foundFile = direct
+                else if (directMd.exists()) foundFile = directMd
+            }
+
+            // 2. Check project root if not found
+            if (foundFile == null && projectRoot != null) {
+                val rootFile = File(projectRoot.getAbsolutePath())
+                foundFile = rootFile.walk().firstOrNull { it.isFile && (it.name.equals(cleanName, ignoreCase = true) || it.name.equals("$cleanName.md", ignoreCase = true)) }
+            }
+
+            if (foundFile != null && foundFile.exists()) {
+                withContext(Dispatchers.Main) {
+                    val tab =
+                        TabRegistry.getTab(
+                            file = FileWrapper(foundFile),
+                            projectRoot = projectRoot,
+                            viewModel = viewModel,
+                            readOnly = false,
+                            customTitle = null,
+                        )
+                    viewModel.tabManager.addTab(tab, switchToTab = true)
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    toast("Note not found: $cleanName")
+                }
+            }
+        } catch (_: Exception) {
+            withContext(Dispatchers.Main) {
+                toast("Could not open note: $cleanName")
             }
         }
     }

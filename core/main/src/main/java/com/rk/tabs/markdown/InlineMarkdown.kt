@@ -8,9 +8,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.sp
 
 /**
- * High-performance parser converting inline Markdown and standard HTML formatting into an [AnnotatedString].
+ * Obsidian & GitHub compliant inline parser converting rich Markdown and HTML tokens to an [AnnotatedString].
  */
 object InlineMarkdown {
 
@@ -20,11 +21,15 @@ object InlineMarkdown {
             (?<bolditalic>\*\*\*(.+?)\*\*\*|___(.+?)___)|
             (?<bold>\*\*(.+?)\*\*|__(.+?)__|<b>(.+?)</b>|<strong>(.+?)</strong>)|
             (?<italic>\*(.+?)\*|_(.+?)_|<i>(.+?)</i>|<em>(.+?)</em>)|
+            (?<highlight>==([^=]+)==|<mark>([^<]+)</mark>)|
             (?<strike>~~(.+?)~~|<s>(.+?)</s>|<strike>(.+?)</strike>|<del>(.+?)</del>)|
             (?<under><u>(.+?)</u>|<ins>(.+?)</ins>)|
+            (?<wikilink>!?\[\[([^|\]]+)(?:\|([^\]]+))?\]\])|
             (?<code>`([^`]+)`|<code>([^<]+)</code>)|
+            (?<math>\$([^$]+)\$)|
             (?<kbd><kbd>([^<]+)</kbd>)|
-            (?<mark><mark>([^<]+)</mark>)|
+            (?<footnote>\[\^([^\]]+)\])|
+            (?<hashtag>(?:^|\s)#[a-zA-Z0-9_\-/]+)|
             (?<link>\[([^\]]+)\]\(([^)]+)\)|<a\s+href=["']([^"']+)["']>([^<]+)</a>)|
             (?<imglink>!\[([^\]]*)\]\(([^)]+)\))|
             (?<br><br\s*/?>)
@@ -72,9 +77,22 @@ object InlineMarkdown {
                         pop()
                     }
 
+                    match.groups["highlight"] != null -> {
+                        val content = match.groupValues[12].ifEmpty { match.groupValues[13] }
+                        pushStyle(
+                            SpanStyle(
+                                background = Color(0xFFFFF176).copy(alpha = 0.45f),
+                                color = Color.Unspecified,
+                                fontWeight = FontWeight.Medium,
+                            ),
+                        )
+                        append(" $content ")
+                        pop()
+                    }
+
                     match.groups["strike"] != null -> {
                         val content =
-                            listOf(match.groupValues[12], match.groupValues[13], match.groupValues[14], match.groupValues[15])
+                            listOf(match.groupValues[14], match.groupValues[15], match.groupValues[16], match.groupValues[17])
                                 .firstOrNull { it.isNotEmpty() } ?: ""
                         pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
                         append(content)
@@ -83,19 +101,58 @@ object InlineMarkdown {
 
                     match.groups["under"] != null -> {
                         val content =
-                            listOf(match.groupValues[16], match.groupValues[17]).firstOrNull { it.isNotEmpty() } ?: ""
+                            listOf(match.groupValues[18], match.groupValues[19]).firstOrNull { it.isNotEmpty() } ?: ""
                         pushStyle(SpanStyle(textDecoration = TextDecoration.Underline))
                         append(content)
                         pop()
                     }
 
+                    match.groups["wikilink"] != null -> {
+                        val rawFull = match.value
+                        val isEmbed = rawFull.startsWith("!")
+                        val target = match.groupValues[20].trim()
+                        val customLabel = match.groupValues[21].ifEmpty { target }
+
+                        if (isEmbed) {
+                            append("[Embed: $customLabel]")
+                        } else {
+                            val start = length
+                            pushStyle(
+                                SpanStyle(
+                                    color = primaryColor,
+                                    textDecoration = TextDecoration.Underline,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            )
+                            append(customLabel)
+                            pop()
+                            addStringAnnotation(tag = "WIKILINK", annotation = target, start = start, end = length)
+                        }
+                    }
+
                     match.groups["code"] != null -> {
-                        val content = match.groupValues[18].ifEmpty { match.groupValues[19] }
+                        val content = match.groupValues[22].ifEmpty { match.groupValues[23] }
                         pushStyle(
                             SpanStyle(
                                 fontFamily = FontFamily.Monospace,
                                 background = codeBgColor,
                                 color = codeTextColor,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 13.sp,
+                            ),
+                        )
+                        append(" $content ")
+                        pop()
+                    }
+
+                    match.groups["math"] != null -> {
+                        val content = match.groupValues[24]
+                        pushStyle(
+                            SpanStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontStyle = FontStyle.Italic,
+                                background = codeBgColor.copy(alpha = 0.5f),
+                                color = primaryColor,
                                 fontWeight = FontWeight.Medium,
                             ),
                         )
@@ -104,7 +161,7 @@ object InlineMarkdown {
                     }
 
                     match.groups["kbd"] != null -> {
-                        val content = match.groupValues[20]
+                        val content = match.groupValues[25]
                         pushStyle(
                             SpanStyle(
                                 fontFamily = FontFamily.Monospace,
@@ -117,22 +174,38 @@ object InlineMarkdown {
                         pop()
                     }
 
-                    match.groups["mark"] != null -> {
-                        val content = match.groupValues[21]
+                    match.groups["footnote"] != null -> {
+                        val id = match.groupValues[26]
+                        val start = length
                         pushStyle(
                             SpanStyle(
-                                background = Color(0xFFFFEB3B).copy(alpha = 0.4f),
-                                color = Color.Unspecified,
-                                fontWeight = FontWeight.Medium,
+                                color = primaryColor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
                             ),
                         )
-                        append(content)
+                        append("[$id]")
+                        pop()
+                        addStringAnnotation(tag = "FOOTNOTE", annotation = id, start = start, end = length)
+                    }
+
+                    match.groups["hashtag"] != null -> {
+                        val tag = match.value.trim()
+                        pushStyle(
+                            SpanStyle(
+                                color = primaryColor,
+                                background = primaryColor.copy(alpha = 0.12f),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                            ),
+                        )
+                        append(" $tag ")
                         pop()
                     }
 
                     match.groups["link"] != null -> {
-                        val linkText = match.groupValues[22].ifEmpty { match.groupValues[25] }
-                        val linkUrl = match.groupValues[23].ifEmpty { match.groupValues[24] }
+                        val linkText = match.groupValues[27].ifEmpty { match.groupValues[30] }
+                        val linkUrl = match.groupValues[28].ifEmpty { match.groupValues[29] }
                         val start = length
                         pushStyle(
                             SpanStyle(
@@ -147,7 +220,7 @@ object InlineMarkdown {
                     }
 
                     match.groups["imglink"] != null -> {
-                        val alt = match.groupValues[26]
+                        val alt = match.groupValues[31]
                         append("[Image: $alt]")
                     }
 
