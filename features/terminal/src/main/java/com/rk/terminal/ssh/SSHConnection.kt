@@ -30,6 +30,16 @@ class QueueInputStream : InputStream() {
         }
     }
 
+    override fun available(): Int {
+        if (closed.get()) return 0
+        val current = (currentBuffer?.size ?: 0) - currentPos
+        var queued = 0
+        for (arr in queue) {
+            queued += arr.size
+        }
+        return maxOf(0, current + queued)
+    }
+
     override fun read(): Int {
         val b = ByteArray(1)
         val n = read(b, 0, 1)
@@ -143,9 +153,12 @@ class SSHConnection(private val config: SSHConfig) {
             session.connect(15000)
             jschSession = session
 
+            val safeCols = if (cols < 20) 80 else cols
+            val safeRows = if (rows < 5) 24 else rows
+
             val channel = session.openChannel("shell") as ChannelShell
             channel.setPtyType("xterm-256color")
-            channel.setPtySize(cols, rows, width, height)
+            channel.setPtySize(safeCols, safeRows, width, height)
 
             val qin = QueueInputStream()
             queueIn = qin
@@ -175,9 +188,11 @@ class SSHConnection(private val config: SSHConfig) {
                             disconnectReason = e.message ?: "Connection reset"
                         }
                     } finally {
-                        isConnectedFlag.set(false)
-                        cleanup()
-                        onDisconnect(disconnectReason)
+                        if (isConnectedFlag.get()) {
+                            isConnectedFlag.set(false)
+                            cleanup()
+                            onDisconnect(disconnectReason)
+                        }
                     }
                 }
         } catch (e: Exception) {
@@ -197,8 +212,10 @@ class SSHConnection(private val config: SSHConfig) {
     }
 
     fun resize(cols: Int, rows: Int, width: Int = 0, height: Int = 0) {
+        val safeCols = if (cols < 20) 80 else cols
+        val safeRows = if (rows < 5) 24 else rows
         try {
-            shellChannel?.setPtySize(cols, rows, width, height)
+            shellChannel?.setPtySize(safeCols, safeRows, width, height)
         } catch (_: Exception) {}
     }
 

@@ -28,7 +28,7 @@ class VirtualKeysListener(val session: TerminalSession) : VirtualKeysView.IVirtu
 
         if (Settings.use_ssh_terminal) {
             val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
-            if (bridge != null && bridge.isConnected) {
+            if (bridge != null) {
                 bridge.write(writeable)
                 return
             }
