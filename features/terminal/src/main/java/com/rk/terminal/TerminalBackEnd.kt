@@ -139,11 +139,7 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
                     bridge.write(escapeSeq)
                     return true
                 }
-                if (e.unicodeChar != 0 && !Character.isISOControl(e.unicodeChar)) {
-                    bridge.write(Character.toString(e.unicodeChar))
-                    return true
-                }
-                return true
+                return false
             }
         }
 
