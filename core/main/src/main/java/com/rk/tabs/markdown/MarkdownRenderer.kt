@@ -24,11 +24,8 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Dangerous
-import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,7 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -57,12 +54,12 @@ import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
-import coil.request.ImageRequest
 import com.blankj.utilcode.util.ClipboardUtils
 import com.rk.DefaultScope
 import com.rk.activities.main.MainViewModel
 import com.rk.file.FileObject
 import com.rk.file.FileWrapper
+import com.rk.resources.drawables
 import com.rk.tabs.base.TabRegistry
 import com.rk.utils.toast
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +77,7 @@ fun MarkdownView(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    baseDirPath: String?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -103,6 +101,7 @@ fun MarkdownView(
                 currentFile = currentFile,
                 projectRoot = projectRoot,
                 viewModel = viewModel,
+                baseDirPath = baseDirPath,
                 imageLoader = imageLoader,
             )
         }
@@ -115,18 +114,19 @@ private fun RenderBlock(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    baseDirPath: String?,
     imageLoader: ImageLoader,
 ) {
     when (block) {
         is MarkdownBlock.Heading -> RenderHeading(block)
         is MarkdownBlock.Paragraph -> RenderParagraph(block.text, currentFile, projectRoot, viewModel)
         is MarkdownBlock.CodeBlock -> RenderCodeBlock(block)
-        is MarkdownBlock.Alert -> RenderAlert(block, currentFile, projectRoot, viewModel, imageLoader)
-        is MarkdownBlock.Table -> RenderTable(block, currentFile, projectRoot, viewModel)
-        is MarkdownBlock.Blockquote -> RenderBlockquote(block.text, currentFile, projectRoot, viewModel)
+        is MarkdownBlock.Alert -> RenderAlert(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
+        is MarkdownBlock.Table -> RenderTable(block)
+        is MarkdownBlock.Blockquote -> RenderBlockquote(block.text)
         is MarkdownBlock.ListItem -> RenderListItem(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.TaskItem -> RenderTaskItem(block, currentFile, projectRoot, viewModel)
-        is MarkdownBlock.Image -> RenderImage(block, currentFile, imageLoader)
+        is MarkdownBlock.Image -> RenderImage(block, baseDirPath, imageLoader)
         MarkdownBlock.HorizontalRule -> {
             HorizontalDivider(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
@@ -202,7 +202,6 @@ private fun RenderParagraph(
 
 @Composable
 private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
-    val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
 
     Surface(
@@ -236,12 +235,21 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
                     },
                     modifier = Modifier.size(32.dp),
                 ) {
-                    Icon(
-                        imageVector = if (copied) Icons.Default.Check else Icons.Outlined.ContentCopy,
-                        contentDescription = "Copy code",
-                        tint = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    if (copied) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Copied",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(drawables.copy),
+                            contentDescription = "Copy code",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
 
@@ -273,16 +281,19 @@ private fun RenderAlert(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    baseDirPath: String?,
     imageLoader: ImageLoader,
 ) {
-    val (accentColor, icon, containerColor) =
+    val accentColor =
         when (alert.type) {
-            AlertType.NOTE -> Triple(Color(0xFF2196F3), Icons.Default.Info, Color(0xFF2196F3).copy(alpha = 0.08f))
-            AlertType.TIP -> Triple(Color(0xFF4CAF50), Icons.Outlined.Lightbulb, Color(0xFF4CAF50).copy(alpha = 0.08f))
-            AlertType.IMPORTANT -> Triple(Color(0xFF9C27B0), Icons.Outlined.Star, Color(0xFF9C27B0).copy(alpha = 0.08f))
-            AlertType.WARNING -> Triple(Color(0xFFFF9800), Icons.Default.Warning, Color(0xFFFF9800).copy(alpha = 0.08f))
-            AlertType.CAUTION -> Triple(Color(0xFFF44336), Icons.Outlined.Dangerous, Color(0xFFF44336).copy(alpha = 0.08f))
+            AlertType.NOTE -> Color(0xFF2196F3)
+            AlertType.TIP -> Color(0xFF4CAF50)
+            AlertType.IMPORTANT -> Color(0xFF9C27B0)
+            AlertType.WARNING -> Color(0xFFFF9800)
+            AlertType.CAUTION -> Color(0xFFF44336)
         }
+
+    val containerColor = accentColor.copy(alpha = 0.08f)
 
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
@@ -304,12 +315,13 @@ private fun RenderAlert(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Title Row
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = alert.title,
-                        tint = accentColor,
-                        modifier = Modifier.size(20.dp),
-                    )
+                    when (alert.type) {
+                        AlertType.NOTE -> Icon(Icons.Default.Info, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                        AlertType.TIP -> Icon(painterResource(drawables.bolt), alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                        AlertType.IMPORTANT -> Icon(Icons.Default.Star, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                        AlertType.WARNING -> Icon(Icons.Default.Warning, alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                        AlertType.CAUTION -> Icon(painterResource(drawables.error), alert.title, tint = accentColor, modifier = Modifier.size(20.dp))
+                    }
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = alert.title,
@@ -325,6 +337,7 @@ private fun RenderAlert(
                         currentFile = currentFile,
                         projectRoot = projectRoot,
                         viewModel = viewModel,
+                        baseDirPath = baseDirPath,
                         imageLoader = imageLoader,
                     )
                 }
@@ -334,12 +347,7 @@ private fun RenderAlert(
 }
 
 @Composable
-private fun RenderTable(
-    table: MarkdownBlock.Table,
-    currentFile: FileObject,
-    projectRoot: FileObject?,
-    viewModel: MainViewModel,
-) {
+private fun RenderTable(table: MarkdownBlock.Table) {
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -414,12 +422,7 @@ private fun RenderTable(
 }
 
 @Composable
-private fun RenderBlockquote(
-    text: String,
-    currentFile: FileObject,
-    projectRoot: FileObject?,
-    viewModel: MainViewModel,
-) {
+private fun RenderBlockquote(text: String) {
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
@@ -497,11 +500,11 @@ private fun RenderTaskItem(
 @Composable
 private fun RenderImage(
     image: MarkdownBlock.Image,
-    currentFile: FileObject,
+    baseDirPath: String?,
     imageLoader: ImageLoader,
 ) {
     val context = LocalContext.current
-    val model = remember(image.url, currentFile) { resolveImageModel(image.url, currentFile, context) }
+    val model = remember(image.url, baseDirPath) { resolveImageModel(image.url, baseDirPath, context) }
 
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
@@ -536,7 +539,7 @@ private fun RenderImage(
     }
 }
 
-private fun resolveImageModel(rawUrl: String, currentFile: FileObject, context: Context): Any {
+private fun resolveImageModel(rawUrl: String, baseDirPath: String?, context: Context): Any {
     val trimmed = rawUrl.trim()
     return when {
         trimmed.startsWith("data:") -> {
@@ -554,10 +557,8 @@ private fun resolveImageModel(rawUrl: String, currentFile: FileObject, context: 
             try {
                 val cleanUrl = trimmed.substringBefore('#').substringBefore('?')
                 val decodedPath = URLDecoder.decode(cleanUrl, "UTF-8")
-                val parent = currentFile.getParentFile()
-                if (parent != null) {
-                    val parentFile = File(parent.getAbsolutePath())
-                    File(parentFile, decodedPath).canonicalFile
+                if (baseDirPath != null) {
+                    File(File(baseDirPath), decodedPath).canonicalFile
                 } else {
                     trimmed
                 }

@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,10 +21,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.blankj.utilcode.util.ClipboardUtils
@@ -35,10 +36,12 @@ import com.rk.activities.main.session.TabState
 import com.rk.file.FileObject
 import com.rk.icons.Menu_book
 import com.rk.icons.XedIcons
+import com.rk.resources.drawables
 import com.rk.resources.strings
 import com.rk.tabs.base.Tab
 import com.rk.utils.toast
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -68,6 +71,8 @@ class MarkdownTab(
 
     @Composable
     override fun RowScope.Actions() {
+        val scope = rememberCoroutineScope()
+
         IconButton(
             onClick = {
                 val editorTab =
@@ -89,18 +94,23 @@ class MarkdownTab(
 
         IconButton(
             onClick = {
-                val content = runCatching {
-                    file.getInputStream().bufferedReader().use { it.readText() }
-                }.getOrNull()
-                if (content != null) {
-                    ClipboardUtils.copyText("Markdown", content)
-                    toast("Markdown copied to clipboard")
+                scope.launch(Dispatchers.IO) {
+                    val content =
+                        runCatching {
+                            file.getInputStream().bufferedReader().use { it.readText() }
+                        }.getOrNull()
+                    if (content != null) {
+                        withContext(Dispatchers.Main) {
+                            ClipboardUtils.copyText("Markdown", content)
+                            toast("Markdown copied to clipboard")
+                        }
+                    }
                 }
             },
             modifier = Modifier.size(48.dp),
         ) {
             Icon(
-                imageVector = Icons.Outlined.ContentCopy,
+                painter = painterResource(drawables.copy),
                 contentDescription = "Copy Markdown",
             )
         }
@@ -120,8 +130,8 @@ class MarkdownTab(
 
     @Composable
     override fun Content() {
-        var markdownText by remember { mutableStateOf<String?>(null) }
         var parsedBlocks by remember { mutableStateOf<List<MarkdownBlock>?>(null) }
+        var baseDirPath by remember { mutableStateOf<String?>(null) }
         var isLoading by remember { mutableStateOf(true) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -133,7 +143,11 @@ class MarkdownTab(
                     withContext(Dispatchers.IO) {
                         file.getInputStream().bufferedReader().use { it.readText() }
                     }
-                markdownText = content
+                val dirPath =
+                    withContext(Dispatchers.IO) {
+                        file.getParentFile()?.getAbsolutePath()
+                    }
+                baseDirPath = dirPath
                 val blocks =
                     withContext(Dispatchers.Default) {
                         MarkdownBlockParser.parse(content)
@@ -175,6 +189,7 @@ class MarkdownTab(
                             currentFile = file,
                             projectRoot = projectRoot,
                             viewModel = viewModel,
+                            baseDirPath = baseDirPath,
                         )
                     }
                 }
