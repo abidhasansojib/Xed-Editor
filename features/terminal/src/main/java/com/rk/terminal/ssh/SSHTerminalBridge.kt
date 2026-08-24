@@ -3,12 +3,12 @@ package com.rk.terminal.ssh
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import com.termux.terminal.ByteQueue
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.lang.reflect.Method
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -30,14 +30,19 @@ class SSHTerminalBridge(
     private var writerThread: Thread? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private var terminalQueue: ByteQueue? = null
+    private var terminalQueue: Any? = null
+    private var queueReadMethod: Method? = null
 
     init {
         try {
             val field = TerminalSession::class.java.getDeclaredField("mTerminalToProcessIOQueue").apply {
                 isAccessible = true
             }
-            terminalQueue = field.get(session) as? ByteQueue
+            val q = field.get(session)
+            terminalQueue = q
+            queueReadMethod = q?.javaClass?.getMethod("read", ByteArray::class.java, Boolean::class.javaPrimitiveType)?.apply {
+                isAccessible = true
+            }
         } catch (_: Exception) {}
     }
 
@@ -115,11 +120,12 @@ class SSHTerminalBridge(
         writerThread =
             thread(name = "SSH-Writer-$sessionId", isDaemon = true) {
                 val buf = ByteArray(4096)
-                val queue = terminalQueue
-                if (queue != null) {
+                val q = terminalQueue
+                val readMethod = queueReadMethod
+                if (q != null && readMethod != null) {
                     try {
                         while (active.get()) {
-                            val bytesRead = queue.read(buf, true)
+                            val bytesRead = readMethod.invoke(q, buf, true) as? Int ?: -1
                             if (bytesRead == -1) break
                             if (bytesRead > 0) {
                                 sshConnection?.write(buf, 0, bytesRead)
