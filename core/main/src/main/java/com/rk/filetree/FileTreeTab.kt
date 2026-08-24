@@ -250,14 +250,7 @@ class FileTreeTab(val root: FileObject) : DrawerTab() {
     }
 
     override fun getIcon(): Icon {
-        val iconId =
-            if ((root is UriWrapper && root.isTermuxUri()) || (root is FileWrapper && root.file == sandboxHomeDir())) {
-                drawables.terminal
-            } else {
-                drawables.outline_folder
-            }
-
-        return Icon.ResourceIcon(iconId)
+        return Icon.ResourceIcon(drawables.outline_folder)
     }
 
     override fun equals(other: Any?): Boolean {

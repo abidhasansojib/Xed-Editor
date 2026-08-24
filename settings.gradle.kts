@@ -40,7 +40,7 @@ if (!soraX.exists() || soraX.listFiles()?.isEmpty() != false) {
 
 include(":app", ":core:main", ":core:components", ":core:resources")
 
-include(":features:terminal", ":features:extensions", ":features:runner", ":features:git")
+include(":features:extensions", ":features:runner", ":features:git")
 
 include(":editor", ":oniguruma-native", ":editor-lsp", ":language-textmate")
 
@@ -53,6 +53,3 @@ project(":editor-lsp").projectDir = file("soraX/editor-lsp")
 project(":language-textmate").projectDir = file("soraX/language-textmate")
 
 include(":baselineprofile", ":benchmark", ":benchmark2")
-include(":features:terminal:proot")
-include(":features:terminal:link2symlink")
-include(":features:terminal:xed-cli")

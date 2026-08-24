@@ -9,19 +9,11 @@ sealed class SettingsRoutes(val route: String) {
 
     data object Keybindings : SettingsRoutes("keybindings")
 
-    data object TerminalSettings : SettingsRoutes("terminal_settings")
-
-    data object TerminalExtraKeys : SettingsRoutes("terminal_extra_keys")
-
-    data object TerminalCheck : SettingsRoutes("terminal_check")
-
     data object About : SettingsRoutes("about")
 
     data object EditorFontScreen : SettingsRoutes("editor_font_screen")
 
     data object AppFontScreen : SettingsRoutes("app_font_screen")
-
-    data object TerminalFontScreen : SettingsRoutes("terminal_font_screen")
 
     data object DefaultEncoding : SettingsRoutes("default_encoding")
 

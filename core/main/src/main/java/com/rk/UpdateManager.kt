@@ -5,8 +5,6 @@ import com.rk.commands.KeybindingsManager
 import com.rk.file.child
 import com.rk.file.localBinDir
 import com.rk.file.localDir
-import com.rk.file.sandboxDir
-import com.rk.file.sandboxHomeDir
 import com.rk.file.toFileWrapper
 import com.rk.lsp.LspPersistence
 import com.rk.settings.Preference
@@ -49,26 +47,6 @@ object UpdateManager {
 
                 if (lastVersionCode <= 66L) {
                     Settings.line_spacing = 1f
-                }
-
-                if (lastVersionCode <= 68L) {
-                    val rootfs =
-                        sandboxDir().listFiles()?.filter {
-                            it.absolutePath != sandboxHomeDir().absolutePath &&
-                                it.absolutePath != sandboxDir().child("tmp").absolutePath
-                        } ?: emptyList()
-
-                    if (rootfs.isNotEmpty()) {
-                        localDir().child(".terminal_setup_ok_DO_NOT_REMOVE").createNewFile()
-                    }
-                }
-
-                if (lastVersionCode <= 69L) {
-                    sandboxDir().child(".cache/.packages_ensured").apply {
-                        if (exists()) {
-                            delete()
-                        }
-                    }
                 }
 
                 if (lastVersionCode <= 73) {
@@ -138,12 +116,6 @@ object UpdateManager {
                     Preference.removeKey("strictMode")
                     if (oldStrictMode != BuildConfig.DEBUG) {
                         Preference.setBoolean("strict_mode", oldStrictMode)
-                    }
-
-                    val oldTerminalVirusNotice = Preference.getBoolean("terminal-virus-notice", false)
-                    Preference.removeKey("terminal-virus-notice")
-                    if (oldTerminalVirusNotice) {
-                        Preference.setBoolean("terminal_virus_notice", true)
                     }
 
                     val oldTextMateSuggestion = Preference.getBoolean("textMateSuggestion", true)

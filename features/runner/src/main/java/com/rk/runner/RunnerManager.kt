@@ -7,7 +7,6 @@ import com.rk.events.Events
 import com.rk.extension.api.XedExtensionPoint
 import com.rk.file.FileObject
 import com.rk.icons.Icon
-import com.rk.runner.runners.XedProjectRunner
 import com.rk.runner.runners.web.html.HtmlRunner
 import com.rk.runner.runners.web.markdown.MarkdownRunner
 import com.rk.settings.Settings
@@ -21,11 +20,10 @@ import org.jetbrains.annotations.ApiStatus
 object RunnerManager {
 
     private val _extensionRunners = MutableStateFlow<List<Runner>>(emptyList())
-
     val extensionRunners = _extensionRunners.asStateFlow()
 
     private val _builtinRunners =
-        MutableStateFlow<List<Runner>>(listOf(HtmlRunner, MarkdownRunner, XedProjectRunner))
+        MutableStateFlow<List<Runner>>(listOf(HtmlRunner, MarkdownRunner))
     val builtinRunners = _builtinRunners.asStateFlow()
 
     @XedExtensionPoint
@@ -36,13 +34,11 @@ object RunnerManager {
     }
 
     @ApiStatus.Internal
-    // TODO: Temp
     fun addBuiltInRunner(vararg servers: Runner) {
         _builtinRunners.update { it + servers }
     }
 
     @ApiStatus.Internal
-    // TODO: Temp
     fun removeBuiltInRunner(vararg servers: Runner) {
         _builtinRunners.update { list -> list.filterNot { runner -> runner in servers } }
     }
@@ -59,7 +55,7 @@ object RunnerManager {
     fun getAvailableRunners(fileObject: FileObject?, projectRoot: FileObject?): List<Runner> {
         val result = mutableListOf<Runner>()
 
-        val runners = builtinRunners.value + extensionRunners.value + ShellBasedRunners.runners.value
+        val runners = builtinRunners.value + extensionRunners.value
         runners.forEach { runner ->
             if (runner.isEnabled()) {
                 when (runner) {

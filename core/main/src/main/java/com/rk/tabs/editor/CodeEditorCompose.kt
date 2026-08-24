@@ -317,9 +317,7 @@ private suspend fun Editor.connectLsp(
             return
         }
 
-    if (!FeatureRegistry.isEnabled("feature_terminal")) {
-        servers = servers.filter { it.getConnectionConfig() !is LspConnectionConfig.Process }
-    }
+    servers = servers.filter { it.getConnectionConfig() !is LspConnectionConfig.Process }
 
     // Language servers fail with content URIs
     if (file !is FileWrapper) {

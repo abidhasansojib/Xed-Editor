@@ -53,7 +53,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 const val DEFAULT_EDITOR_FONT_PATH = "fonts/SourceCodePro-Medium.ttf"
-const val DEFAULT_TERMINAL_FONT_PATH = "fonts/SourceCodePro-Medium.ttf"
 const val DEFAULT_APP_FONT_PATH = "fonts/Outfit-Regular.ttf"
 
 private var appFontRefreshKey by mutableIntStateOf(0)

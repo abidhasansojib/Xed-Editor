@@ -71,17 +71,6 @@ fun DisclaimerScreen(navController: NavHostController, onDecline: () -> Unit) {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = stringResource(strings.terminal_risks),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error,
-                )
-
-                Text(text = stringResource(strings.terminal_risks_content), style = MaterialTheme.typography.bodyMedium)
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
                     text = stringResource(strings.third_party_ext),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,

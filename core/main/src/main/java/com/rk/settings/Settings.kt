@@ -59,7 +59,6 @@ object Settings {
     var check_for_update by CachedPreference("check_update", false)
     var is_editor_font_asset by CachedPreference("is_font_asset", false)
     var is_app_font_asset by CachedPreference("is_app_font_asset", false)
-    var is_terminal_font_asset by CachedPreference("is_terminal_font_asset", false)
     var smooth_tabs by CachedPreference("smooth_tab", false)
     var actual_tabs by CachedPreference("actual_tab", false)
     var hide_soft_keyboard_if_hardware by CachedPreference("always_show_soft_keyboard", true)
@@ -70,7 +69,6 @@ object Settings {
             "has_shown_private_data_dir_warning",
             false,
         )
-    var has_shown_terminal_dir_warning by CachedPreference("has_shown_terminal_dir_warning", false)
     private var _anr_watchdog by CachedPreference("anr", BuildConfig.DEBUG)
     var anr_watchdog: Boolean
         get() = FeatureRegistry.isEnabled("debug_mode") && _anr_watchdog
@@ -98,7 +96,6 @@ object Settings {
     var terminate_sessions_on_exit by CachedPreference("terminate_sessions_on_exit", false)
     var donated by CachedPreference("donated", false)
     var sandbox by CachedPreference("sandbox", true)
-    var terminal_virus_notice by CachedPreference("terminal_virus_notice", false)
     var textmate_suggestions by CachedPreference("textmate_suggestions", true)
     var seccomp_mode by CachedPreference("seccomp_mode", "unspecified")
     private var _desktop_mode by CachedPreference("desktop_mode", false)
@@ -142,8 +139,6 @@ object Settings {
     var show_minimap by CachedPreference("show_minimap", false)
     var auto_closing_bracket by CachedPreference("auto_closing_bracket", true)
     var confirm_exit by CachedPreference("confirm_exit", true)
-    var terminal_clipboard_keybindings by CachedPreference("terminal_clipboard_keybindings", true)
-    var use_ssh_terminal by CachedPreference("use_ssh_terminal", false)
     var default_markdown_preview by CachedPreference("default_markdown_preview", true)
     private var _record_rpc by CachedPreference("record_rpc", BuildConfig.DEBUG)
     var record_rpc: Boolean
@@ -167,11 +162,8 @@ object Settings {
             "default_night_mode",
             AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM,
         )
-    var terminal_font_size by CachedPreference("terminal_font_size", 13)
-    var terminal_scrollback_buffer by CachedPreference("terminal_scrollback_buffer", 5000)
     var auto_save_delay by CachedPreference("auto_save_delay", 400L)
     var lsp_log_limit by CachedPreference("lsp_log_limit", 5000)
-    var ssh_port by CachedPreference("ssh_port", 22)
 
     var user_declined_value by CachedPreference("user_declined_value", false)
     var user_said_maybe_later by CachedPreference("user_said_maybe_later", false)
@@ -188,9 +180,6 @@ object Settings {
     var icon_pack: String by CachedPreference("icon_pack", "")
     var editor_font_path by CachedPreference("selected_font_path", "")
     var app_font_path by CachedPreference("app_font_path", "")
-    var terminal_font_path by CachedPreference("terminal_font_path", "")
-    var terminal_cursor_style by CachedPreference("terminal_cursor_style", "block")
-    var terminal_extra_keys by CachedPreference("terminal_extra_keys", DEFAULT_TERMINAL_EXTRA_KEYS)
     var encoding: String by CachedPreference("encoding", Charset.defaultCharset().name())
     var line_ending by CachedPreference("line_ending", "lf")
     var current_lang: String by
@@ -202,10 +191,6 @@ object Settings {
     var git_name by CachedPreference("git_name", "")
     var git_email by CachedPreference("git_email", "")
     var git_conflict_detection by CachedPreference("git_conflict_detection", true)
-    var ssh_host by CachedPreference("ssh_host", "")
-    var ssh_username by CachedPreference("ssh_username", "")
-    var ssh_auth_type by CachedPreference("ssh_auth_type", "password")
-    var ssh_key_path by CachedPreference("ssh_key_path", "")
     var excluded_files_search by
         CachedPreference("excluded_files_search", DEFAULT_EXCLUDED_FILES_SEARCH.joinToString("\n"))
     var excluded_files_drawer by
@@ -543,6 +528,3 @@ open class CachedPreference<T>(val key: String, val defaultValue: T) : ReadWrite
         state = value
     }
 }
-
-private const val DEFAULT_TERMINAL_EXTRA_KEYS =
-    "[\n  [\n    \"ESC\",\n    {\n      \"key\": \"/\",\n      \"popup\": \"\\\\\"\n    },\n    {\n      \"key\": \"-\",\n      \"popup\": \"|\"\n    },\n    \"HOME\",\n    \"UP\",\n    \"END\",\n    \"PGUP\"\n  ],\n  [\n    \"TAB\",\n    \"CTRL\",\n    \"ALT\",\n    \"LEFT\",\n    \"DOWN\",\n    \"RIGHT\",\n    \"PGDN\"\n  ]\n]"

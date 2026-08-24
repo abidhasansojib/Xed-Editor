@@ -8,7 +8,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import com.rk.DefaultScope
-import com.rk.TerminalLauncher
 import com.rk.activities.main.MainActivity
 import com.rk.activities.main.filterWithFiles
 import com.rk.events.Events
@@ -28,27 +27,6 @@ import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.ServerCapabilities
 import java.io.File
 import java.net.URI
-
-abstract class ScriptedLspServer : LspServer() {
-    abstract val installScript: File
-    abstract val installId: String
-
-    override fun install(activity: Activity) = launchInstaller(activity)
-
-    override fun uninstall(activity: Activity) = launchInstaller(activity, "--uninstall")
-
-    override fun update(activity: Activity) = launchInstaller(activity, "--update")
-
-    protected fun launchInstaller(activity: Activity, vararg flags: String) {
-        TerminalLauncher.launch(
-            activity = activity,
-            exe = "/bin/bash",
-            args = arrayOf(installScript.absolutePath, *flags),
-            id = installId,
-            env = arrayOf("DEBIAN_FRONTEND=noninteractive"),
-        )
-    }
-}
 
 abstract class LspServer {
     abstract val id: String

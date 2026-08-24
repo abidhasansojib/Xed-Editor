@@ -227,7 +227,6 @@
 -keep class com.rk.runner.** { *; }
 -keep class com.rk.tabs.** { *; }
 -keep class com.rk.utils.** { *; }
--keep class com.rk.proot.** { *; }
 -keep class com.rk.components.** { *; }
 -keep class com.rk.App { *; }
 -keep class com.rk.XedConstants { *; }

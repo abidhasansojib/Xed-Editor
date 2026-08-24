@@ -32,7 +32,6 @@ composeBom = "2025.11.01"
 coil = "2.7.0"
 ktfmt = "0.25.0"
 jgit = "6.2.0.202206071550-r"
-jsch = "0.2.23"
 
 tsBinding = "4.3.2"
 lsp4j = "1.0.0"
@@ -126,7 +125,6 @@ androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 commons-net = { module = "commons-net:commons-net", version.ref = "commonsNet" }
 nanohttpd = { module = "org.nanohttpd:nanohttpd", version.ref = "nanohttpd" }
-jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }
 
 # Images
 glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }

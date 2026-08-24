@@ -3,7 +3,7 @@
 <img src="/fastlane/metadata/android/en-US/images/icon.png" alt="Xed-Editor Icon" width="90" height="90" align="left"/>
 
 **Xed-Editor** is a versatile and extensible text editor for Android, featuring syntax highlighting,
-LSP-powered code intelligence, a built-in terminal, extensions, and fast project-wide tools for
+LSP-powered code intelligence, HTML & Markdown live runners, extensions, and fast project-wide tools for
 efficient editing.
 
 ![Android CI](https://github.com/Rohitkushvaha01/Xed-Editor/actions/workflows/android.yml/badge.svg?event=push&style=for-the-badge)
