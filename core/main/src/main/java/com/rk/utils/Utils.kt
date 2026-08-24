@@ -339,23 +339,23 @@ fun getFileColor(file: FileObject?): Color? {
     return file?.let { FileDecorationRegistry.getDecoration(it).color }
 }
 
-fun hasBinaryChars(text: String): Boolean {
+fun hasBinaryChars(text: CharSequence): Boolean {
     val threshold = 0.3
     val checkedCharacters = 1024
 
-    val checkText = text.take(checkedCharacters)
-    if (checkText.isEmpty()) return false
+    val length = minOf(text.length, checkedCharacters)
+    if (length == 0) return false
 
-    // Null character
-    if (checkText.any { it.code == 0 }) return true
-
-    // Amount of unusual control characters
-    val unusualCharCount = checkText.count { c ->
-        c.isISOControl() && c.code != 9 && c.code != 10 && c.code != 12 && c.code != 13
+    var unusualCharCount = 0
+    for (i in 0 until length) {
+        val c = text[i]
+        if (c.code == 0) return true
+        if (c.isISOControl() && c.code != 9 && c.code != 10 && c.code != 12 && c.code != 13) {
+            unusualCharCount++
+        }
     }
 
-    // If the amount of unusual control chars in the file content is over 30%
-    return unusualCharCount.toDouble() / checkText.length > threshold
+    return unusualCharCount.toDouble() / length > threshold
 }
 
 private val binaryExtensions: Set<String> =

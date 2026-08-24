@@ -359,8 +359,8 @@ class Editor : CodeEditor {
         language.tabSize = Settings.tab_size
 
         if (Settings.textmate_suggestions) {
-            val keywords = KeywordManager.getKeywords(textmateScope)
-            keywords?.let { language.setCompleterKeywords(it.toTypedArray()) }
+            val keywords = KeywordManager.getKeywordsArray(textmateScope)
+            keywords?.let { language.setCompleterKeywords(it) }
         }
 
         withContext(Dispatchers.Main) { setEditorLanguage(language) }

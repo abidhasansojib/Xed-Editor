@@ -204,8 +204,8 @@ open class EditorTab(
                     runCatching {
                         withTask {
                             editorState.content = file.getInputStream().use { ContentIO.createFrom(it, charset) }
-
-                            if (Settings.detect_bin_files && hasBinaryChars(editorState.content.toString())) {
+                            val content = editorState.content
+                            if (content != null && Settings.detect_bin_files && hasBinaryChars(content)) {
                                 editorState.editable = false
                                 showNotice(BINARY_NOTICE_KEY) { id -> BinaryNotice(id) }
                             }
