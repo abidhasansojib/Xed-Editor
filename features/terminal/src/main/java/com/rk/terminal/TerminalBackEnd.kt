@@ -1,5 +1,5 @@
 package com.rk.terminal
-
+ 
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -8,6 +8,7 @@ import com.blankj.utilcode.util.KeyboardUtils
 import com.rk.activities.terminal.Terminal
 import com.rk.settings.Settings
 import com.rk.settings.terminal.TerminalCursorStyle
+import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
 import com.rk.terminal.virtualkeys.SpecialButton
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
@@ -29,8 +30,15 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
 
     override fun onPasteTextFromClipboard(session: TerminalSession?) {
         val clip = ClipboardUtils.getText().toString()
-        val emulator = terminalView.get()?.mEmulator ?: return
         if (clip.isNotBlank()) {
+            if (Settings.use_ssh_terminal && session != null) {
+                val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
+                if (bridge != null && bridge.isConnected) {
+                    bridge.write(clip)
+                    return
+                }
+            }
+            val emulator = terminalView.get()?.mEmulator ?: return
             emulator.paste(clip)
         }
     }
@@ -40,8 +48,6 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
     override fun onColorsChanged(session: TerminalSession) {}
 
     override fun onTerminalCursorStateChange(state: Boolean) {}
-
-    //override fun setTerminalShellPid(session: TerminalSession, pid: Int) {}
 
     override fun getTerminalCursorStyle(): Int {
         return when (Settings.terminal_cursor_style) {
@@ -102,13 +108,6 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
         return true
     }
 
-    //TODO
-
-//    override fun shouldSupportClipboardKeybindings(): Boolean {
-//        return Settings.terminal_clipboard_keybindings
-//    }
-
-
     override fun isTerminalViewSelected(): Boolean {
         return true
     }
@@ -117,13 +116,34 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
 
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
         if (Settings.use_ssh_terminal) {
-            val bridge = (session as? com.rk.terminal.ssh.SSHTerminalSession)?.bridge
-                ?: com.rk.terminal.ssh.SSHTerminalBridgeRegistry.getBridgeForSession(session)
+            val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
             if (bridge != null && bridge.isConnected) {
-                if (keyCode == KeyEvent.KEYCODE_ENTER) {
-                    bridge.write("\r")
+                val escapeSeq =
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_ENTER -> "\r"
+                        KeyEvent.KEYCODE_DEL -> "\u007F"
+                        KeyEvent.KEYCODE_TAB -> "\t"
+                        KeyEvent.KEYCODE_ESCAPE -> "\u001B"
+                        KeyEvent.KEYCODE_DPAD_UP -> "\u001B[A"
+                        KeyEvent.KEYCODE_DPAD_DOWN -> "\u001B[B"
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> "\u001B[C"
+                        KeyEvent.KEYCODE_DPAD_LEFT -> "\u001B[D"
+                        KeyEvent.KEYCODE_MOVE_HOME -> "\u001B[H"
+                        KeyEvent.KEYCODE_MOVE_END -> "\u001B[F"
+                        KeyEvent.KEYCODE_PAGE_UP -> "\u001B[5~"
+                        KeyEvent.KEYCODE_PAGE_DOWN -> "\u001B[6~"
+                        KeyEvent.KEYCODE_FORWARD_DEL -> "\u001B[3~"
+                        else -> null
+                    }
+                if (escapeSeq != null) {
+                    bridge.write(escapeSeq)
                     return true
                 }
+                if (e.unicodeChar != 0 && !Character.isISOControl(e.unicodeChar)) {
+                    bridge.write(Character.toString(e.unicodeChar))
+                    return true
+                }
+                return true
             }
         }
 
@@ -171,6 +191,27 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
     }
 
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
+        if (Settings.use_ssh_terminal) {
+            val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
+            if (bridge != null && bridge.isConnected) {
+                if (ctrlDown) {
+                    val ctrlByte =
+                        when (codePoint) {
+                            in 97..122 -> (codePoint - 96).toByte() // a-z -> 1..26
+                            in 65..90 -> (codePoint - 64).toByte() // A-Z -> 1..26
+                            32 -> 0.toByte() // Ctrl+Space -> NUL
+                            else -> null
+                        }
+                    if (ctrlByte != null) {
+                        bridge.write(byteArrayOf(ctrlByte))
+                        return true
+                    }
+                }
+                val chars = Character.toChars(codePoint)
+                bridge.write(String(chars))
+                return true
+            }
+        }
         return false
     }
 

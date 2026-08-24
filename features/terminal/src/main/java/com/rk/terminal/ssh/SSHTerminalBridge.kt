@@ -30,9 +30,7 @@ class SSHTerminalBridge(
     val isConnected: Boolean
         get() = active.get() && (sshConnection?.isConnected == true)
 
-    init {
-        (session as? SSHTerminalSession)?.bridge = this
-    }
+
 
     fun appendToEmulator(text: String) {
         val bytes = text.toByteArray(StandardCharsets.UTF_8)
