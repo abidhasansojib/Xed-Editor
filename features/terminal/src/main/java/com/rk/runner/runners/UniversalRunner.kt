@@ -95,9 +95,9 @@ object UniversalRunner : FileRunner() {
 
         val runCmd =
             when (ext) {
-                "py" -> "python3 $fileName 2>/dev/null || python $fileName"
+                "py" -> "python3 $fileName || python $fileName"
                 "js" -> "node $fileName"
-                "ts" -> "npx ts-node $fileName 2>/dev/null || (tsc $fileName && node $baseName.js)"
+                "ts" -> "npx ts-node $fileName || (tsc $fileName && node $baseName.js)"
                 "java" -> "java $fileName"
                 "kt" -> "kotlinc $fileName -include-runtime -d temp.jar && java -jar temp.jar"
                 "rs" -> "rustc $fileName -o temp.out && ./temp.out"

@@ -7,21 +7,72 @@ import com.jcraft.jsch.Session
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
+ * Thread-safe unbounded InputStream backed by a blocking queue.
+ * Completely immune to Java's PipedInputStream thread-affinity ("Read/Write end dead") crashes.
+ */
+class QueueInputStream : InputStream() {
+    private val queue = LinkedBlockingQueue<ByteArray>()
+    private var currentBuffer: ByteArray? = null
+    private var currentPos = 0
+    private val closed = AtomicBoolean(false)
+
+    fun enqueue(data: ByteArray) {
+        if (!closed.get() && data.isNotEmpty()) {
+            val copy = data.copyOf()
+            queue.put(copy)
+        }
+    }
+
+    override fun read(): Int {
+        val b = ByteArray(1)
+        val n = read(b, 0, 1)
+        return if (n == -1) -1 else (b[0].toInt() and 0xFF)
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (len == 0) return 0
+        if (closed.get() && queue.isEmpty() && currentBuffer == null) return -1
+
+        while (currentBuffer == null || currentPos >= (currentBuffer?.size ?: 0)) {
+            if (closed.get()) return -1
+            val next = queue.poll(500, TimeUnit.MILLISECONDS) ?: continue
+            currentBuffer = next
+            currentPos = 0
+        }
+
+        val buf = currentBuffer ?: return -1
+        val available = buf.size - currentPos
+        val toRead = minOf(available, len)
+        System.arraycopy(buf, currentPos, b, off, toRead)
+        currentPos += toRead
+
+        if (currentPos >= buf.size) {
+            currentBuffer = null
+            currentPos = 0
+        }
+
+        return toRead
+    }
+
+    override fun close() {
+        closed.set(true)
+    }
+}
+
+/**
  * Manages an active SSH connection and interactive PTY shell channel using JSch.
- * Uses piped streams for rock-solid interactive terminal communication without EOF drops.
  */
 class SSHConnection(private val config: SSHConfig) {
     private var jschSession: Session? = null
     private var shellChannel: ChannelShell? = null
-    private var pipedIn: PipedInputStream? = null
-    private var pipedOut: PipedOutputStream? = null
+    private var queueIn: QueueInputStream? = null
     private val isConnectedFlag = AtomicBoolean(false)
     private var readerThread: Thread? = null
 
@@ -96,12 +147,9 @@ class SSHConnection(private val config: SSHConfig) {
             channel.setPtyType("xterm-256color")
             channel.setPtySize(cols, rows, width, height)
 
-            // Setup piped input stream for stable terminal stdin
-            val pin = PipedInputStream(16384)
-            val pout = PipedOutputStream(pin)
-            pipedIn = pin
-            pipedOut = pout
-            channel.setInputStream(pin)
+            val qin = QueueInputStream()
+            queueIn = qin
+            channel.setInputStream(qin)
 
             val inStream: InputStream = channel.inputStream
 
@@ -140,14 +188,8 @@ class SSHConnection(private val config: SSHConfig) {
 
     fun write(data: ByteArray, offset: Int = 0, count: Int = data.size) {
         if (!isConnected) return
-        try {
-            pipedOut?.let { out ->
-                out.write(data, offset, count)
-                out.flush()
-            }
-        } catch (_: Exception) {
-            disconnect()
-        }
+        val chunk = if (offset == 0 && count == data.size) data else data.copyOfRange(offset, offset + count)
+        queueIn?.enqueue(chunk)
     }
 
     fun write(text: String) {
@@ -169,14 +211,9 @@ class SSHConnection(private val config: SSHConfig) {
 
     private fun cleanup() {
         try {
-            pipedOut?.close()
+            queueIn?.close()
         } catch (_: Exception) {}
-        pipedOut = null
-
-        try {
-            pipedIn?.close()
-        } catch (_: Exception) {}
-        pipedIn = null
+        queueIn = null
 
         try {
             shellChannel?.disconnect()
