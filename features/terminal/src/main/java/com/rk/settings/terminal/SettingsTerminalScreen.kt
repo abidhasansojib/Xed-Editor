@@ -164,7 +164,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                         showSwitch = false,
                         default = false,
                         onClick = {
-                            passwordValue = ""
+                            passwordValue = com.rk.terminal.ssh.SSHSecureStorage.getPassword() ?: ""
                             showPasswordDialog = true
                         },
                     )
@@ -175,7 +175,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                         showSwitch = false,
                         default = false,
                         onClick = {
-                            keyValue = com.rk.terminal.ssh.SSHSecureStorage.getPrivateKey()
+                            keyValue = com.rk.terminal.ssh.SSHSecureStorage.getPrivateKey() ?: ""
                             showKeyDialog = true
                         },
                     )
@@ -186,7 +186,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                         showSwitch = false,
                         default = false,
                         onClick = {
-                            passphraseValue = ""
+                            passphraseValue = com.rk.terminal.ssh.SSHSecureStorage.getKeyPassphrase() ?: ""
                             showPassphraseDialog = true
                         },
                     )
@@ -283,6 +283,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                 title = stringResource(strings.ssh_password),
                 inputLabel = stringResource(strings.ssh_password),
                 inputValue = passwordValue,
+                isPassword = true,
                 confirmEnabled = true,
                 onInputValueChange = { passwordValue = it },
                 onConfirm = {
@@ -298,6 +299,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                 title = stringResource(strings.ssh_private_key),
                 inputLabel = stringResource(strings.ssh_private_key),
                 inputValue = keyValue,
+                singleLineMode = false,
                 confirmEnabled = true,
                 onInputValueChange = { keyValue = it },
                 onConfirm = {
@@ -313,6 +315,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                 title = stringResource(strings.ssh_key_passphrase),
                 inputLabel = stringResource(strings.ssh_key_passphrase),
                 inputValue = passphraseValue,
+                isPassword = true,
                 confirmEnabled = true,
                 onInputValueChange = { passphraseValue = it },
                 onConfirm = { com.rk.terminal.ssh.SSHSecureStorage.setKeyPassphrase(passphraseValue) },

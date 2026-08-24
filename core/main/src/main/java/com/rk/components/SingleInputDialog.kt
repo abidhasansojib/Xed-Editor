@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -19,12 +20,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import com.rk.icons.Error
 import com.rk.icons.XedIcons
+import com.rk.resources.drawables
 import com.rk.resources.strings
 
 @Composable
@@ -41,8 +47,10 @@ fun SingleInputDialog(
     confirmText: String = stringResource(strings.apply),
     confirmEnabled: Boolean = true,
     errorMessage: String? = null,
+    isPassword: Boolean = false,
 ) {
     val focusRequester = remember { FocusRequester() }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     var textFieldValue by remember {
         mutableStateOf(TextFieldValue(text = inputValue, selection = TextRange(inputValue.length)))
@@ -61,6 +69,12 @@ fun SingleInputDialog(
                 OutlinedTextField(
                     value = textFieldValue,
                     singleLine = singleLineMode,
+                    visualTransformation =
+                        if (isPassword && !passwordVisible) {
+                            PasswordVisualTransformation()
+                        } else {
+                            VisualTransformation.None
+                        },
                     onValueChange = {
                         textFieldValue = it
                         onInputValueChange(it.text)
@@ -77,17 +91,29 @@ fun SingleInputDialog(
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }
-                        } else null,
-                    trailingIcon =
+                        } else {
+                            null
+                        },
+                    trailingIcon = {
                         if (errorMessage != null) {
-                            {
+                            Icon(
+                                XedIcons.Error,
+                                stringResource(strings.error),
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        } else if (isPassword) {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(
-                                    XedIcons.Error,
-                                    stringResource(strings.error),
-                                    tint = MaterialTheme.colorScheme.error,
+                                    painter =
+                                        painterResource(
+                                            if (passwordVisible) drawables.eye_closed else drawables.eye
+                                        ),
+                                    contentDescription =
+                                        if (passwordVisible) "Hide password" else "Show password",
                                 )
                             }
-                        } else null,
+                        }
+                    },
                     keyboardActions =
                         KeyboardActions(
                             onDone = {
@@ -95,7 +121,11 @@ fun SingleInputDialog(
                                 onFinish()
                             }
                         ),
-                    keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                    keyboardOptions =
+                        KeyboardOptions.Default.copy(
+                            keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text,
+                            imeAction = ImeAction.Done,
+                        ),
                 )
 
                 LaunchedEffect(Unit) { focusRequester.requestFocus() }
