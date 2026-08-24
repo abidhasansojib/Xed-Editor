@@ -826,7 +826,6 @@
     <string name="ssh_missing_config">Please configure SSH Host and Username in Settings -> Terminal</string>
     <string name="default_markdown_preview">Default Markdown preview</string>
     <string name="default_markdown_preview_desc">Open Markdown (.md) files in preview mode by default instead of edit mode</string>
-    <string name="edit_mode">Edit mode</string>
     <string name="preview_mode">Preview mode</string>
     <string name="markdown_preview_tab">Markdown preview</string>
 </resources>
