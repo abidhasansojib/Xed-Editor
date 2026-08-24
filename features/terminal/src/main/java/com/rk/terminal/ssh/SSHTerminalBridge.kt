@@ -51,6 +51,7 @@ class SSHTerminalBridge(
     }
 
     fun start(cols: Int = 80, rows: Int = 24, width: Int = 0, height: Int = 0) {
+        if (isConnected) return
         if (active.getAndSet(true)) return
 
         val config = SSHConfig.loadFromSettings()

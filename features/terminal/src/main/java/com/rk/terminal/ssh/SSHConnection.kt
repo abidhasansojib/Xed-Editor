@@ -7,82 +7,19 @@ import com.jcraft.jsch.Session
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
+import java.io.OutputStream
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
- * Thread-safe unbounded InputStream backed by a blocking queue.
- * Completely immune to Java's PipedInputStream thread-affinity ("Read/Write end dead") crashes.
- */
-class QueueInputStream : InputStream() {
-    private val queue = LinkedBlockingQueue<ByteArray>()
-    private var currentBuffer: ByteArray? = null
-    private var currentPos = 0
-    private val closed = AtomicBoolean(false)
-
-    fun enqueue(data: ByteArray) {
-        if (!closed.get() && data.isNotEmpty()) {
-            val copy = data.copyOf()
-            queue.put(copy)
-        }
-    }
-
-    override fun available(): Int {
-        if (closed.get()) return 0
-        val current = (currentBuffer?.size ?: 0) - currentPos
-        var queued = 0
-        for (arr in queue) {
-            queued += arr.size
-        }
-        return maxOf(0, current + queued)
-    }
-
-    override fun read(): Int {
-        val b = ByteArray(1)
-        val n = read(b, 0, 1)
-        return if (n == -1) -1 else (b[0].toInt() and 0xFF)
-    }
-
-    override fun read(b: ByteArray, off: Int, len: Int): Int {
-        if (len == 0) return 0
-        if (closed.get() && queue.isEmpty() && currentBuffer == null) return -1
-
-        while (currentBuffer == null || currentPos >= (currentBuffer?.size ?: 0)) {
-            if (closed.get()) return -1
-            val next = queue.poll(500, TimeUnit.MILLISECONDS) ?: continue
-            currentBuffer = next
-            currentPos = 0
-        }
-
-        val buf = currentBuffer ?: return -1
-        val available = buf.size - currentPos
-        val toRead = minOf(available, len)
-        System.arraycopy(buf, currentPos, b, off, toRead)
-        currentPos += toRead
-
-        if (currentPos >= buf.size) {
-            currentBuffer = null
-            currentPos = 0
-        }
-
-        return toRead
-    }
-
-    override fun close() {
-        closed.set(true)
-    }
-}
-
-/**
  * Manages an active SSH connection and interactive PTY shell channel using JSch.
+ * Writes directly to ChannelShell's outputStream without blocking or premature EOF.
  */
 class SSHConnection(private val config: SSHConfig) {
     private var jschSession: Session? = null
     private var shellChannel: ChannelShell? = null
-    private var queueIn: QueueInputStream? = null
+    private var outStream: OutputStream? = null
     private val isConnectedFlag = AtomicBoolean(false)
     private var readerThread: Thread? = null
 
@@ -168,11 +105,9 @@ class SSHConnection(private val config: SSHConfig) {
             channel.setPtyType("xterm-256color")
             channel.setPtySize(safeCols, safeRows, width, height)
 
-            val qin = QueueInputStream()
-            queueIn = qin
-            channel.setInputStream(qin)
-
             val inStream: InputStream = channel.inputStream
+            val out = channel.outputStream
+            outStream = out
 
             channel.connect(20000)
             shellChannel = channel
@@ -215,8 +150,10 @@ class SSHConnection(private val config: SSHConfig) {
     }
 
     fun write(data: ByteArray, offset: Int = 0, count: Int = data.size) {
-        val chunk = if (offset == 0 && count == data.size) data.copyOf() else data.copyOfRange(offset, offset + count)
-        queueIn?.enqueue(chunk)
+        try {
+            outStream?.write(data, offset, count)
+            outStream?.flush()
+        } catch (_: Exception) {}
     }
 
     fun write(text: String) {
@@ -239,9 +176,9 @@ class SSHConnection(private val config: SSHConfig) {
 
     private fun cleanup() {
         try {
-            queueIn?.close()
+            outStream?.close()
         } catch (_: Exception) {}
-        queueIn = null
+        outStream = null
 
         try {
             shellChannel?.disconnect()

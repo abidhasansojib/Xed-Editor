@@ -301,10 +301,13 @@ private fun ColumnScope.TerminalView(
                     val currentSessionId =
                         if (pendingCommand != null) pendingCommand!!.id
                         else terminalActivity.sessionBinder?.get()?.getService()?.currentSession?.value ?: "main"
-                    com.rk.terminal.ssh.SSHTerminalBridgeRegistry.getBridge(currentSessionId)?.start(
-                        mEmulator?.mColumns ?: 80,
-                        mEmulator?.mRows ?: 24,
-                    )
+                    val bridge = com.rk.terminal.ssh.SSHTerminalBridgeRegistry.getBridge(currentSessionId)
+                    if (bridge != null && !bridge.isConnected) {
+                        bridge.start(
+                            mEmulator?.mColumns ?: 80,
+                            mEmulator?.mRows ?: 24,
+                        )
+                    }
                 }
 
                 // Legacy behavior
@@ -540,7 +543,9 @@ fun Terminal.changeSession(sessionId: String) {
 
     if (Settings.use_ssh_terminal) {
         val bridge = com.rk.terminal.ssh.SSHTerminalBridgeRegistry.getBridge(sessionId)
-        bridge?.start(terminalView.mEmulator?.mColumns ?: 80, terminalView.mEmulator?.mRows ?: 24)
+        if (bridge != null && !bridge.isConnected) {
+            bridge.start(terminalView.mEmulator?.mColumns ?: 80, terminalView.mEmulator?.mRows ?: 24)
+        }
     }
 
     terminalView.apply {
