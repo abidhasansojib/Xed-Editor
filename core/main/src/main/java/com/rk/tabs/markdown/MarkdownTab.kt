@@ -2,8 +2,10 @@ package com.rk.tabs.markdown
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +53,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -246,25 +249,40 @@ class MarkdownTab(
                 parsedBlocks != null -> {
                     var scale by remember { mutableFloatStateOf(1f) }
                     var offset by remember { mutableStateOf(Offset.Zero) }
-                    val transformableState =
-                        rememberTransformableState { zoomChange, panChange, _ ->
-                            val newScale = (scale * zoomChange).coerceIn(0.6f, 4.0f)
-                            scale = newScale
-                            if (newScale in 0.95f..1.05f) {
-                                offset = Offset.Zero
-                            } else {
-                                offset += panChange
-                            }
-                        }
-
                     val scrollState = rememberScrollState()
 
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        SelectionContainer(
+                    Box(
+                        modifier =
+                            Modifier.fillMaxSize()
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        do {
+                                            val event = awaitPointerEvent()
+                                            val canceled = event.changes.any { it.isConsumed }
+                                            if (!canceled && event.changes.size >= 2) {
+                                                val zoom = event.calculateZoom()
+                                                val pan = event.calculatePan()
+
+                                                val newScale = (scale * zoom).coerceIn(0.6f, 4.0f)
+                                                scale = newScale
+
+                                                if (newScale > 1.05f) {
+                                                    offset += pan
+                                                } else {
+                                                    offset = Offset.Zero
+                                                }
+
+                                                event.changes.forEach { it.consume() }
+                                            }
+                                        } while (event.changes.any { it.pressed })
+                                    }
+                                },
+                    ) {
+                        Box(
                             modifier =
                                 Modifier.fillMaxSize()
                                     .verticalScroll(scrollState)
-                                    .transformable(state = transformableState)
                                     .graphicsLayer(
                                         scaleX = scale,
                                         scaleY = scale,
@@ -273,13 +291,15 @@ class MarkdownTab(
                                         transformOrigin = TransformOrigin(0.5f, 0f),
                                     ),
                         ) {
-                            MarkdownView(
-                                blocks = parsedBlocks ?: emptyList(),
-                                currentFile = file,
-                                projectRoot = projectRoot,
-                                viewModel = viewModel,
-                                baseDirPath = baseDirPath,
-                            )
+                            SelectionContainer {
+                                MarkdownView(
+                                    blocks = parsedBlocks ?: emptyList(),
+                                    currentFile = file,
+                                    projectRoot = projectRoot,
+                                    viewModel = viewModel,
+                                    baseDirPath = baseDirPath,
+                                )
+                            }
                         }
 
                         // Floating Zoom Indicator & Reset Button when zoomed
