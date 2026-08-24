@@ -53,6 +53,7 @@ import com.rk.resources.strings
 import com.rk.runner.RunnerManager
 import com.rk.runner.ShellBasedRunner
 import com.rk.runner.ShellBasedRunners
+import com.rk.settings.Settings
 import com.rk.utils.openDocs
 import com.rk.utils.toast
 import kotlinx.coroutines.launch
