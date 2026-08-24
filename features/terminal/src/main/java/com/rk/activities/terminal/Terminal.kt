@@ -49,6 +49,7 @@ import com.rk.file.localBinDir
 import com.rk.file.sandboxDir
 import com.rk.resources.getString
 import com.rk.resources.strings
+import com.rk.settings.Settings
 import com.rk.terminal.NEXT_STAGE
 import com.rk.terminal.ROOTFS_ARM
 import com.rk.terminal.ROOTFS_ARM64
