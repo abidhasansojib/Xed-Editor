@@ -34,6 +34,7 @@ import org.commonmark.node.StrongEmphasis
 import org.commonmark.node.Text
 import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
+import java.util.regex.Pattern
 
 /**
  * Standard AST-based Obsidian and GFM Markdown parser powered by [org.commonmark].
@@ -49,6 +50,9 @@ object MarkdownBlockParser {
         )
 
     private val PARSER = Parser.builder().extensions(EXTENSIONS).build()
+
+    private val HTML_IMG_PATTERN =
+        Pattern.compile("<img\\s+[^>]*src=[\"']([^\"']+)[\"'][^>]*?(?:alt=[\"']([^\"']*)[\"'])?[^>]*>", Pattern.CASE_INSENSITIVE)
 
     fun parse(markdown: String): List<MarkdownBlock> {
         val document = PARSER.parse(markdown)
@@ -159,7 +163,28 @@ object MarkdownBlockParser {
             }
 
             is HtmlBlock -> {
-                blocks.add(MarkdownBlock.Paragraph(text = node.literal ?: ""))
+                val raw = (node.literal ?: "").trim()
+
+                // Check for embedded <img> tags inside HTML blocks (e.g. <div align="center"><img src="..."></div>)
+                val imgMatcher = HTML_IMG_PATTERN.matcher(raw)
+                if (imgMatcher.find()) {
+                    val src = imgMatcher.group(1) ?: ""
+                    val alt = imgMatcher.group(2) ?: ""
+                    blocks.add(MarkdownBlock.Image(alt = alt, url = src))
+                } else {
+                    // Check if inner markdown has ![alt](url)
+                    val mdImgMatch = Regex("!\\[([^\\]]*)\\]\\(([^)]+)\\)").find(raw)
+                    if (mdImgMatch != null) {
+                        val alt = mdImgMatch.groupValues[1]
+                        val url = mdImgMatch.groupValues[2]
+                        blocks.add(MarkdownBlock.Image(alt = alt, url = url))
+                    } else {
+                        val stripped = raw.replace(Regex("<div[^>]*>|</div>|<center>|</center>|<p[^>]*>|</p>", RegexOption.IGNORE_CASE), "").trim()
+                        if (stripped.isNotEmpty()) {
+                            blocks.add(MarkdownBlock.Paragraph(text = stripped))
+                        }
+                    }
+                }
             }
 
             else -> {}
@@ -168,7 +193,6 @@ object MarkdownBlockParser {
 
     private fun parseBlockQuote(node: BlockQuote): MarkdownBlock {
         val rawText = renderInlineText(node).trim()
-        // Obsidian callout pattern: [!type(+/-)] Custom title
         val alertMatch =
             Regex("^\\[!([a-zA-Z0-9_-]+)([+-])?\\]\\s*([^\\n]*)(?:\\n([\\s\\S]*))?$", RegexOption.IGNORE_CASE)
                 .find(rawText)

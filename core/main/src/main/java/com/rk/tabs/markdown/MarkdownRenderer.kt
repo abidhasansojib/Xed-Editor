@@ -15,7 +15,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -150,12 +149,12 @@ private fun RenderBlock(
     imageLoader: ImageLoader,
 ) {
     when (block) {
-        is MarkdownBlock.Heading -> RenderHeading(block)
+        is MarkdownBlock.Heading -> RenderHeading(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.Paragraph -> RenderParagraph(block.text, currentFile, projectRoot, viewModel)
         is MarkdownBlock.CodeBlock -> RenderCodeBlock(block)
         is MarkdownBlock.Alert -> RenderAlert(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
-        is MarkdownBlock.Table -> RenderTable(block)
-        is MarkdownBlock.Blockquote -> RenderBlockquote(block.text)
+        is MarkdownBlock.Table -> RenderTable(block, currentFile, projectRoot, viewModel)
+        is MarkdownBlock.Blockquote -> RenderBlockquote(block.text, currentFile, projectRoot, viewModel)
         is MarkdownBlock.ListItem -> RenderListItem(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.TaskItem -> RenderTaskItem(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.Image -> RenderImage(block, baseDirPath, imageLoader)
@@ -171,7 +170,12 @@ private fun RenderBlock(
 }
 
 @Composable
-private fun RenderHeading(heading: MarkdownBlock.Heading) {
+private fun RenderHeading(
+    heading: MarkdownBlock.Heading,
+    currentFile: FileObject,
+    projectRoot: FileObject?,
+    viewModel: MainViewModel,
+) {
     val style =
         when (heading.level) {
             1 -> MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold, fontSize = 28.sp)
@@ -182,15 +186,41 @@ private fun RenderHeading(heading: MarkdownBlock.Heading) {
             else -> MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
 
-    val color =
+    val primaryColor =
         when (heading.level) {
             1 -> MaterialTheme.colorScheme.primary
-            2 -> MaterialTheme.colorScheme.onSurface
             else -> MaterialTheme.colorScheme.onSurface
         }
 
+    val codeBgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    val codeTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val context = LocalContext.current
+
+    val annotated =
+        remember(heading.text, primaryColor, codeBgColor) {
+            InlineMarkdown.parse(
+                text = heading.text,
+                primaryColor = primaryColor,
+                codeBgColor = codeBgColor,
+                codeTextColor = codeTextColor,
+            )
+        }
+
     Column(modifier = Modifier.fillMaxWidth().padding(top = if (heading.level <= 2) 8.dp else 4.dp)) {
-        Text(text = heading.text, style = style, color = color)
+        ClickableText(
+            text = annotated,
+            style = style.copy(color = primaryColor),
+            onClick = { offset ->
+                annotated.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                    handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
+                    return@ClickableText
+                }
+                annotated.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                    handleWikilinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
+                    return@ClickableText
+                }
+            },
+        )
         if (heading.level <= 2) {
             HorizontalDivider(
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp),
@@ -449,7 +479,17 @@ private fun RenderAlert(
 }
 
 @Composable
-private fun RenderTable(table: MarkdownBlock.Table) {
+private fun RenderTable(
+    table: MarkdownBlock.Table,
+    currentFile: FileObject,
+    projectRoot: FileObject?,
+    viewModel: MainViewModel,
+) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val codeBgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    val codeTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val context = LocalContext.current
+
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -468,16 +508,31 @@ private fun RenderTable(table: MarkdownBlock.Table) {
                 ) {
                     table.headers.forEachIndexed { colIdx, header ->
                         val align = table.alignments.getOrElse(colIdx) { TextAlign.Left }
+                        val annotatedHeader =
+                            remember(header, primaryColor, codeBgColor) {
+                                InlineMarkdown.parse(header, primaryColor, codeBgColor, codeTextColor)
+                            }
                         Box(
                             modifier =
-                                Modifier.widthIn(min = 100.dp, max = 220.dp)
+                                Modifier.widthIn(min = 100.dp, max = 320.dp)
                                     .padding(horizontal = 8.dp),
                         ) {
-                            Text(
-                                text = header,
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = align,
+                            ClickableText(
+                                text = annotatedHeader,
+                                style =
+                                    MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        textAlign = align,
+                                    ),
+                                onClick = { offset ->
+                                    annotatedHeader.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let {
+                                        handleLinkClick(it.item, currentFile, projectRoot, viewModel, context)
+                                    }
+                                    annotatedHeader.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let {
+                                        handleWikilinkClick(it.item, currentFile, projectRoot, viewModel, context)
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -498,16 +553,26 @@ private fun RenderTable(table: MarkdownBlock.Table) {
                     ) {
                         row.forEachIndexed { colIdx, cell ->
                             val align = table.alignments.getOrElse(colIdx) { TextAlign.Left }
+                            val annotatedCell =
+                                remember(cell, primaryColor, codeBgColor) {
+                                    InlineMarkdown.parse(cell, primaryColor, codeBgColor, codeTextColor)
+                                }
                             Box(
                                 modifier =
-                                    Modifier.widthIn(min = 100.dp, max = 220.dp)
+                                    Modifier.widthIn(min = 100.dp, max = 320.dp)
                                         .padding(horizontal = 8.dp),
                             ) {
-                                Text(
-                                    text = cell,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = align,
+                                ClickableText(
+                                    text = annotatedCell,
+                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface, textAlign = align),
+                                    onClick = { offset ->
+                                        annotatedCell.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let {
+                                            handleLinkClick(it.item, currentFile, projectRoot, viewModel, context)
+                                        }
+                                        annotatedCell.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let {
+                                            handleWikilinkClick(it.item, currentFile, projectRoot, viewModel, context)
+                                        }
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }
@@ -524,7 +589,12 @@ private fun RenderTable(table: MarkdownBlock.Table) {
 }
 
 @Composable
-private fun RenderBlockquote(text: String) {
+private fun RenderBlockquote(
+    text: String,
+    currentFile: FileObject,
+    projectRoot: FileObject?,
+    viewModel: MainViewModel,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
@@ -539,11 +609,7 @@ private fun RenderBlockquote(text: String) {
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyLarge.copy(fontStyle = FontStyle.Italic, lineHeight = 22.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            RenderParagraph(text, currentFile, projectRoot, viewModel)
         }
     }
 }
@@ -705,7 +771,7 @@ private fun handleLinkClick(
         }
 
         url.startsWith("#") -> {
-            // Heading anchor jump
+            // Heading anchor
         }
 
         else -> {
@@ -714,30 +780,69 @@ private fun handleLinkClick(
                     val cleanUrl = url.substringBefore('#').substringBefore('?')
                     val decodedPath = URLDecoder.decode(cleanUrl, "UTF-8")
 
-                    val targetFile: FileObject? =
-                        when {
-                            url.startsWith("/") -> FileWrapper(File(decodedPath))
-                            url.startsWith("file://") -> FileWrapper(File(decodedPath.removePrefix("file://")))
-                            else -> {
-                                val parent = currentFile.getParentFile()
-                                if (parent != null) {
-                                    val parentFile = File(parent.getAbsolutePath())
-                                    val resolved = File(parentFile, decodedPath).canonicalFile
-                                    FileWrapper(resolved)
-                                } else null
+                    var targetFile: File? = null
+
+                    when {
+                        url.startsWith("file://", ignoreCase = true) -> {
+                            val path = decodedPath.removePrefix("file://").removePrefix("file:")
+                            val f = File(path)
+                            if (f.exists()) targetFile = f
+                        }
+                        url.startsWith("/") -> {
+                            val f = File(decodedPath)
+                            if (f.exists()) targetFile = f
+                        }
+                        else -> {
+                            // 1. Check relative to current file directory
+                            val parent = currentFile.getParentFile()
+                            if (parent != null) {
+                                val candidate = File(File(parent.getAbsolutePath()), decodedPath).canonicalFile
+                                if (candidate.exists()) {
+                                    targetFile = candidate
+                                }
+                            }
+
+                            // 2. Check relative to project root
+                            if (targetFile == null && projectRoot != null) {
+                                val candidate = File(File(projectRoot.getAbsolutePath()), decodedPath).canonicalFile
+                                if (candidate.exists()) {
+                                    targetFile = candidate
+                                }
+                            }
+
+                            // 3. Search project directory tree by filename
+                            if (targetFile == null && projectRoot != null) {
+                                val fileName = File(decodedPath).name
+                                val found = File(projectRoot.getAbsolutePath()).walk().firstOrNull {
+                                    it.isFile && it.name.equals(fileName, ignoreCase = true)
+                                }
+                                if (found != null) {
+                                    targetFile = found
+                                }
                             }
                         }
+                    }
 
                     if (targetFile != null && targetFile.exists()) {
                         withContext(Dispatchers.Main) {
+                            val isMd = targetFile.name.endsWith(".md", ignoreCase = true) ||
+                                targetFile.name.endsWith(".markdown", ignoreCase = true)
                             val tab =
-                                TabRegistry.getTab(
-                                    file = targetFile,
-                                    projectRoot = projectRoot,
-                                    viewModel = viewModel,
-                                    readOnly = false,
-                                    customTitle = null,
-                                )
+                                if (isMd) {
+                                    MarkdownTab(
+                                        file = FileWrapper(targetFile),
+                                        projectRoot = projectRoot,
+                                        viewModel = viewModel,
+                                    )
+                                } else {
+                                    TabRegistry.getTab(
+                                        file = FileWrapper(targetFile),
+                                        projectRoot = projectRoot,
+                                        viewModel = viewModel,
+                                        readOnly = false,
+                                        customTitle = null,
+                                    )
+                                }
                             viewModel.tabManager.addTab(tab, switchToTab = true)
                         }
                     } else {
@@ -785,14 +890,24 @@ private fun handleWikilinkClick(
 
             if (foundFile != null && foundFile.exists()) {
                 withContext(Dispatchers.Main) {
+                    val isMd = foundFile.name.endsWith(".md", ignoreCase = true) ||
+                        foundFile.name.endsWith(".markdown", ignoreCase = true)
                     val tab =
-                        TabRegistry.getTab(
-                            file = FileWrapper(foundFile),
-                            projectRoot = projectRoot,
-                            viewModel = viewModel,
-                            readOnly = false,
-                            customTitle = null,
-                        )
+                        if (isMd) {
+                            MarkdownTab(
+                                file = FileWrapper(foundFile),
+                                projectRoot = projectRoot,
+                                viewModel = viewModel,
+                            )
+                        } else {
+                            TabRegistry.getTab(
+                                file = FileWrapper(foundFile),
+                                projectRoot = projectRoot,
+                                viewModel = viewModel,
+                                readOnly = false,
+                                customTitle = null,
+                            )
+                        }
                     viewModel.tabManager.addTab(tab, switchToTab = true)
                 }
             } else {
