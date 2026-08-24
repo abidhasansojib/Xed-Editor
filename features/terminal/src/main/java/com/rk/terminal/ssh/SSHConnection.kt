@@ -7,18 +7,21 @@ import com.jcraft.jsch.Session
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
-import java.io.OutputStream
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
- * Manages an active SSH connection and interactive PTY shell channel using JSch with modern cipher support.
+ * Manages an active SSH connection and interactive PTY shell channel using JSch.
+ * Uses piped streams for rock-solid interactive terminal communication without EOF drops.
  */
 class SSHConnection(private val config: SSHConfig) {
     private var jschSession: Session? = null
     private var shellChannel: ChannelShell? = null
-    private var outputStream: OutputStream? = null
+    private var pipedIn: PipedInputStream? = null
+    private var pipedOut: PipedOutputStream? = null
     private val isConnectedFlag = AtomicBoolean(false)
     private var readerThread: Thread? = null
 
@@ -92,12 +95,15 @@ class SSHConnection(private val config: SSHConfig) {
             val channel = session.openChannel("shell") as ChannelShell
             channel.setPtyType("xterm-256color")
             channel.setPtySize(cols, rows, width, height)
-            channel.setEnv("TERM", "xterm-256color")
-            channel.setEnv("COLORTERM", "truecolor")
-            channel.setEnv("LANG", "C.UTF-8")
+
+            // Setup piped input stream for stable terminal stdin
+            val pin = PipedInputStream(16384)
+            val pout = PipedOutputStream(pin)
+            pipedIn = pin
+            pipedOut = pout
+            channel.setInputStream(pin)
 
             val inStream: InputStream = channel.inputStream
-            outputStream = channel.outputStream
 
             channel.connect(15000)
             shellChannel = channel
@@ -135,7 +141,7 @@ class SSHConnection(private val config: SSHConfig) {
     fun write(data: ByteArray, offset: Int = 0, count: Int = data.size) {
         if (!isConnected) return
         try {
-            outputStream?.let { out ->
+            pipedOut?.let { out ->
                 out.write(data, offset, count)
                 out.flush()
             }
@@ -163,9 +169,14 @@ class SSHConnection(private val config: SSHConfig) {
 
     private fun cleanup() {
         try {
-            outputStream?.close()
+            pipedOut?.close()
         } catch (_: Exception) {}
-        outputStream = null
+        pipedOut = null
+
+        try {
+            pipedIn?.close()
+        } catch (_: Exception) {}
+        pipedIn = null
 
         try {
             shellChannel?.disconnect()

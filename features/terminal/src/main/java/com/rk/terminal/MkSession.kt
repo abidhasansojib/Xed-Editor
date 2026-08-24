@@ -47,7 +47,7 @@ object MkSession {
                 TerminalSession(
                     "/system/bin/sh",
                     context.filesDir.absolutePath,
-                    arrayOf("sh"),
+                    arrayOf("sh", "-c", "exec cat"),
                     env,
                     Settings.terminal_scrollback_buffer,
                     sessionClient,
