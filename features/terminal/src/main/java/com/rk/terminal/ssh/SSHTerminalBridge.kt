@@ -1,17 +1,21 @@
 package com.rk.terminal.ssh
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import com.termux.terminal.ByteQueue
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 /**
  * Bridges an interactive SSH connection with a Termux [TerminalSession] and its [com.termux.terminal.TerminalEmulator].
- * Implements [TerminalSession.TerminalSessionWriter] for direct, non-blocking I/O without subprocess conflicts.
  */
 class SSHTerminalBridge(
     val context: Context,
@@ -19,22 +23,36 @@ class SSHTerminalBridge(
     val sessionClient: TerminalSessionClient,
     val sessionId: String,
     var initialCommand: String? = null,
-) : TerminalSession.TerminalSessionWriter {
-
+) {
     private val scope = CoroutineScope(Dispatchers.IO)
     private val active = AtomicBoolean(false)
     private var sshConnection: SSHConnection? = null
+    private var writerThread: Thread? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private var terminalQueue: ByteQueue? = null
 
     init {
-        session.setCustomWriter(this)
+        try {
+            val field = TerminalSession::class.java.getDeclaredField("mTerminalToProcessIOQueue").apply {
+                isAccessible = true
+            }
+            terminalQueue = field.get(session) as? ByteQueue
+        } catch (_: Exception) {}
     }
 
-    override fun write(data: ByteArray, offset: Int, count: Int) {
-        sshConnection?.write(data, offset, count)
+    fun appendToEmulator(text: String) {
+        val bytes = text.toByteArray(StandardCharsets.UTF_8)
+        appendToEmulator(bytes, bytes.size)
     }
 
-    override fun onResize(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
-        sshConnection?.resize(columns, rows, cellWidthPixels, cellHeightPixels)
+    fun appendToEmulator(data: ByteArray, count: Int) {
+        mainHandler.post {
+            try {
+                session.emulator?.append(data, count)
+                sessionClient.onTextChanged(session)
+            } catch (_: Exception) {}
+        }
     }
 
     fun start(cols: Int = 80, rows: Int = 24, width: Int = 0, height: Int = 0) {
@@ -43,7 +61,7 @@ class SSHTerminalBridge(
         val config = SSHConfig.loadFromSettings()
 
         if (!config.isConfigured()) {
-            session.appendToEmulator(
+            appendToEmulator(
                 "\r\n\u001B[1;33m[SSH Terminal Mode Active]\u001B[0m\r\n" +
                     "\u001B[0;31mSSH Host or Username is not configured.\u001B[0m\r\n" +
                     "\u001B[0;37mPlease go to Settings -> Terminal to configure your SSH credentials.\u001B[0m\r\n\r\n"
@@ -51,7 +69,7 @@ class SSHTerminalBridge(
             return
         }
 
-        session.appendToEmulator(
+        appendToEmulator(
             "\r\n\u001B[1;36mConnecting to ${config.username}@${config.host}:${config.port}...\u001B[0m\r\n"
         )
 
@@ -65,7 +83,7 @@ class SSHTerminalBridge(
                 width = width,
                 height = height,
                 onData = { buffer, count ->
-                    session.appendToEmulator(buffer, count)
+                    appendToEmulator(buffer, count)
                 },
                 onDisconnect = { reason ->
                     val msg =
@@ -74,14 +92,16 @@ class SSHTerminalBridge(
                         } else {
                             "\r\n\u001B[1;33m[SSH Session closed]\u001B[0m\r\n"
                         }
-                    session.appendToEmulator(msg)
-                    sessionClient.onSessionFinished(session)
+                    appendToEmulator(msg)
+                    mainHandler.post {
+                        sessionClient.onSessionFinished(session)
+                    }
                     active.set(false)
                 },
             )
 
             if (connection.isConnected) {
-                session.appendToEmulator("\u001B[1;32mConnected to ${config.host}!\u001B[0m\r\n\r\n")
+                appendToEmulator("\u001B[1;32mConnected to ${config.host}!\u001B[0m\r\n\r\n")
 
                 val cmd = initialCommand
                 if (!cmd.isNullOrBlank()) {
@@ -90,10 +110,32 @@ class SSHTerminalBridge(
                 }
             }
         }
+
+        // Forward user keystrokes from terminal session queue directly to SSH
+        writerThread =
+            thread(name = "SSH-Writer-$sessionId", isDaemon = true) {
+                val buf = ByteArray(4096)
+                val queue = terminalQueue
+                if (queue != null) {
+                    try {
+                        while (active.get()) {
+                            val bytesRead = queue.read(buf, true)
+                            if (bytesRead == -1) break
+                            if (bytesRead > 0) {
+                                sshConnection?.write(buf, 0, bytesRead)
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
     }
 
     fun resize(cols: Int, rows: Int, width: Int = 0, height: Int = 0) {
         sshConnection?.resize(cols, rows, width, height)
+    }
+
+    fun write(data: ByteArray, offset: Int = 0, count: Int = data.size) {
+        sshConnection?.write(data, offset, count)
     }
 
     fun write(text: String) {
@@ -104,6 +146,8 @@ class SSHTerminalBridge(
         active.set(false)
         sshConnection?.disconnect()
         sshConnection = null
+        writerThread?.interrupt()
+        writerThread = null
     }
 }
 

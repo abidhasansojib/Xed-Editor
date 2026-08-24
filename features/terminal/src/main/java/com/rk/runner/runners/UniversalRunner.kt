@@ -88,7 +88,7 @@ object UniversalRunner : FileRunner() {
         )
     }
 
-    private fun getSSHRunCommand(fileObject: FileObject): String {
+    private suspend fun getSSHRunCommand(fileObject: FileObject): String {
         val fileName = fileObject.getName()
         val ext = fileObject.getExtension().lowercase()
         val baseName = fileName.substringBeforeLast('.')

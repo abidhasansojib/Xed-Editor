@@ -37,8 +37,18 @@ object MkSession {
                 "ssh://unconfigured"
             }
 
+            val env = arrayOf(
+                "TERM=xterm-256color",
+                "COLORTERM=truecolor",
+                "LANG=C.UTF-8",
+            )
+
             val session =
                 TerminalSession(
+                    "/system/bin/sh",
+                    context.filesDir.absolutePath,
+                    arrayOf("-c", "while true; do sleep 3600; done"),
+                    env,
                     Settings.terminal_scrollback_buffer,
                     sessionClient,
                 )
