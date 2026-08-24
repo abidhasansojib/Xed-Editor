@@ -40,7 +40,7 @@ object UniversalCodeIntelligence : IntelligentFeature() {
         if (editor.cursor.isSelected) return
         val lineIdx = editor.cursor.leftLine
         val colIdx = editor.cursor.leftColumn
-        val line = editor.text.getLine(lineIdx)
+        val line = editor.text.getLine(lineIdx).toString()
 
         // Auto-close brackets and quotes if enabled
         if (!Settings.auto_closing_bracket) return
@@ -56,7 +56,7 @@ object UniversalCodeIntelligence : IntelligentFeature() {
     }
 
     private fun autoClosePair(editor: Editor, lineIdx: Int, colIdx: Int, closingChar: Char) {
-        val line = editor.text.getLine(lineIdx)
+        val line = editor.text.getLine(lineIdx).toString()
         val nextChar = if (colIdx < line.length) line[colIdx] else null
 
         // Only insert closing pair if at end of line or before whitespace/closing bracket
@@ -93,7 +93,7 @@ object UniversalCodeIntelligence : IntelligentFeature() {
         val lineIdx = editor.cursor.leftLine
         val colIdx = editor.cursor.leftColumn
 
-        val line = editor.text.getLine(lineIdx)
+        val line = editor.text.getLine(lineIdx).toString()
         val textBefore = line.take(colIdx)
         val textAfter = line.substring(colIdx)
 
