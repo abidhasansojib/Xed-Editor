@@ -78,11 +78,37 @@ data class ShellBasedRunner(override val label: String, val regex: String) : Fil
 
     override suspend fun run(activity: Activity, fileObject: FileObject) {
         val script = runnerDir().child("${label}.sh").createFileIfNot()
+        val isSSH = com.rk.settings.Settings.use_ssh_terminal
+        val sshCmd =
+            if (isSSH) {
+                val scriptContent = runCatching { script.readText() }.getOrDefault("")
+                val scriptBase64 =
+                    android.util.Base64.encodeToString(
+                        scriptContent.toByteArray(java.nio.charset.StandardCharsets.UTF_8),
+                        android.util.Base64.NO_WRAP,
+                    )
+                val fileContent =
+                    runCatching {
+                        fileObject.getInputStream().bufferedReader().use { it.readText() }
+                    }.getOrDefault("")
+                val fileBase64 =
+                    android.util.Base64.encodeToString(
+                        fileContent.toByteArray(java.nio.charset.StandardCharsets.UTF_8),
+                        android.util.Base64.NO_WRAP,
+                    )
+                val fileName = fileObject.getName()
+                "mkdir -p ~/.xed_runner && echo \"$scriptBase64\" | base64 -d > ~/.xed_runner/runner.sh && echo \"$fileBase64\" | base64 -d > ~/.xed_runner/$fileName && cd ~/.xed_runner && chmod +x runner.sh && echo -e \"\\e[32;1m[Running $label on SSH Remote]\\e[0m\" && ./runner.sh ~/.xed_runner/$fileName"
+            } else {
+                null
+            }
+
         TerminalLauncher.launch(
             activity = activity,
+            sandbox = !isSSH,
             exe = "/bin/bash",
             args = arrayOf(script.absolutePath, fileObject.getAbsolutePath()),
             id = label,
+            sshCommand = sshCmd,
         )
     }
 

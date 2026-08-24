@@ -12,7 +12,8 @@ object TerminalLauncher {
         id: String,
         terminatePreviousSession: Boolean,
         workingDir: String?,
-        env: Array<String>
+        env: Array<String>,
+        sshCommand: String?
     ) -> Unit)? = null
 
     fun launch(
@@ -23,9 +24,10 @@ object TerminalLauncher {
         id: String,
         terminatePreviousSession: Boolean = true,
         workingDir: String? = null,
-        env: Array<String> = arrayOf()
+        env: Array<String> = arrayOf(),
+        sshCommand: String? = null
     ) {
-        handler?.invoke(activity, sandbox, exe, args, id, terminatePreviousSession, workingDir, env)
+        handler?.invoke(activity, sandbox, exe, args, id, terminatePreviousSession, workingDir, env, sshCommand)
     }
 }
 

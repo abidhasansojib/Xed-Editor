@@ -87,6 +87,21 @@ public final class TerminalSession extends TerminalOutput {
     private final Integer mTranscriptRows;
 
 
+    public interface TerminalSessionWriter {
+        void write(byte[] data, int offset, int count);
+        void onResize(int columns, int rows, int cellWidthPixels, int cellHeightPixels);
+    }
+
+    private TerminalSessionWriter mCustomWriter;
+
+    public void setCustomWriter(TerminalSessionWriter customWriter) {
+        this.mCustomWriter = customWriter;
+    }
+
+    public TerminalSessionWriter getCustomWriter() {
+        return this.mCustomWriter;
+    }
+
     private static final String LOG_TAG = "TerminalSession";
 
     public TerminalSession(String shellPath, String cwd, String[] args, String[] env, Integer transcriptRows, TerminalSessionClient client) {
@@ -96,6 +111,10 @@ public final class TerminalSession extends TerminalOutput {
         this.mEnv = env;
         this.mTranscriptRows = transcriptRows;
         this.mClient = client;
+    }
+
+    public TerminalSession(Integer transcriptRows, TerminalSessionClient client) {
+        this(null, null, null, null, transcriptRows, client);
     }
 
     /**
@@ -116,8 +135,13 @@ public final class TerminalSession extends TerminalOutput {
         if (mEmulator == null) {
             initializeEmulator(columns, rows, cellWidthPixels, cellHeightPixels);
         } else {
-            JNI.setPtyWindowSize(mTerminalFileDescriptor, rows, columns, cellWidthPixels, cellHeightPixels);
+            if (mShellPath != null && mTerminalFileDescriptor > 0) {
+                JNI.setPtyWindowSize(mTerminalFileDescriptor, rows, columns, cellWidthPixels, cellHeightPixels);
+            }
             mEmulator.resize(columns, rows, cellWidthPixels, cellHeightPixels);
+            if (mCustomWriter != null) {
+                mCustomWriter.onResize(columns, rows, cellWidthPixels, cellHeightPixels);
+            }
         }
     }
 
@@ -136,6 +160,15 @@ public final class TerminalSession extends TerminalOutput {
      */
     public void initializeEmulator(int columns, int rows, int cellWidthPixels, int cellHeightPixels) {
         mEmulator = new TerminalEmulator(this, columns, rows, cellWidthPixels, cellHeightPixels, mTranscriptRows, mClient);
+
+        if (mShellPath == null) {
+            mShellPid = 99999;
+            mClient.setTerminalShellPid(this, mShellPid);
+            if (mCustomWriter != null) {
+                mCustomWriter.onResize(columns, rows, cellWidthPixels, cellHeightPixels);
+            }
+            return;
+        }
 
         int[] processId = new int[1];
         mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns, cellWidthPixels, cellHeightPixels);
@@ -187,11 +220,31 @@ public final class TerminalSession extends TerminalOutput {
 
     }
 
+    public void appendToEmulator(byte[] data, int count) {
+        if (data == null || count <= 0) return;
+        mMainThreadHandler.post(() -> {
+            if (mEmulator != null) {
+                mEmulator.append(data, count);
+                notifyScreenUpdate();
+            }
+        });
+    }
+
+    public void appendToEmulator(String text) {
+        if (text == null) return;
+        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+        appendToEmulator(bytes, bytes.length);
+    }
+
     /**
-     * Write data to the shell process.
+     * Write data to the shell process or custom writer.
      */
     @Override
     public void write(byte[] data, int offset, int count) {
+        if (mCustomWriter != null) {
+            mCustomWriter.write(data, offset, count);
+            return;
+        }
         if (mShellPid > 0) mTerminalToProcessIOQueue.write(data, offset, count);
     }
 
@@ -257,6 +310,10 @@ public final class TerminalSession extends TerminalOutput {
      * Finish this terminal session by sending SIGKILL to the shell.
      */
     public void finishIfRunning() {
+        if (mCustomWriter != null) {
+            cleanupResources(0);
+            return;
+        }
         if (isRunning()) {
             try {
                 Os.kill(mShellPid, OsConstants.SIGKILL);
@@ -278,7 +335,10 @@ public final class TerminalSession extends TerminalOutput {
         // Stop the reader and writer threads, and close the I/O streams
         mTerminalToProcessIOQueue.close();
         mProcessToTerminalIOQueue.close();
-        JNI.close(mTerminalFileDescriptor);
+        if (mTerminalFileDescriptor > 0) {
+            JNI.close(mTerminalFileDescriptor);
+            mTerminalFileDescriptor = 0;
+        }
     }
 
     @Override

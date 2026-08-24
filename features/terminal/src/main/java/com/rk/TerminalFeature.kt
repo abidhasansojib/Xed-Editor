@@ -117,7 +117,7 @@ class TerminalFeature : Feature {
         RunnerManager.addBuiltInRunner(UniversalRunner)
 
         // Register TerminalLauncher handler
-        TerminalLauncher.handler = { activity, sandbox, exe, args, id, terminatePreviousSession, workingDir, env ->
+        TerminalLauncher.handler = { activity, sandbox, exe, args, id, terminatePreviousSession, workingDir, env, sshCommand ->
             pendingCommand =
                 com.rk.exec.TerminalCommand(
                     sandbox = sandbox,
@@ -127,6 +127,7 @@ class TerminalFeature : Feature {
                     terminatePreviousSession = terminatePreviousSession,
                     workingDir = workingDir,
                     env = env,
+                    sshCommand = sshCommand,
                 )
             try {
                 val intent = Intent(activity, Terminal::class.java)

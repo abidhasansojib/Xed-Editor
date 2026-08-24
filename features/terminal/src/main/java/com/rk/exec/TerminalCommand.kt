@@ -10,6 +10,7 @@ data class TerminalCommand(
     val terminatePreviousSession: Boolean = true,
     val workingDir: String? = null,
     val env: Array<String> = arrayOf(),
+    val sshCommand: String? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (javaClass != other?.javaClass) return false

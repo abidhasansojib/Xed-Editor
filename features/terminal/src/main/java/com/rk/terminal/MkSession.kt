@@ -37,23 +37,24 @@ object MkSession {
                 "ssh://unconfigured"
             }
 
-            val env = arrayOf(
-                "TERM=xterm-256color",
-                "COLORTERM=truecolor",
-                "LANG=C.UTF-8",
-            )
-
             val session =
                 TerminalSession(
-                    "/system/bin/sh",
-                    context.filesDir.absolutePath,
-                    arrayOf("-c", "cat"),
-                    env,
                     Settings.terminal_scrollback_buffer,
                     sessionClient,
                 )
 
-            val bridge = com.rk.terminal.ssh.SSHTerminalBridge(context, session, sessionClient, sessionId)
+            val initialCmd = pendingCommand?.sshCommand ?: pendingCommand?.let {
+                if (it.args.isNotEmpty()) "${it.exe} ${it.args.joinToString(" ")}" else it.exe
+            }
+            pendingCommand = null
+
+            val bridge = com.rk.terminal.ssh.SSHTerminalBridge(
+                context = context,
+                session = session,
+                sessionClient = sessionClient,
+                sessionId = sessionId,
+                initialCommand = initialCmd,
+            )
             com.rk.terminal.ssh.SSHTerminalBridgeRegistry.register(sessionId, bridge)
 
             return session to workingDir
