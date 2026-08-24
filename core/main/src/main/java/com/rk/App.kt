@@ -108,7 +108,7 @@ open class App : Application() {
                 val isEditorAsset = if (editorFontPath.isNotEmpty()) Settings.is_editor_font_asset else true
 
                 val appFontPath = Settings.app_font_path.ifEmpty { DEFAULT_APP_FONT_PATH }
-                val isAppAsset = if (editorFontPath.isNotEmpty()) Settings.is_app_font_asset else true
+                val isAppAsset = if (appFontPath.isNotEmpty()) Settings.is_app_font_asset else true
 
                 FontCache.loadFont(this@App, editorFontPath, isEditorAsset)
                 FontCache.loadFont(this@App, appFontPath, isAppAsset)
