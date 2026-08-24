@@ -44,22 +44,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.rk.DefaultScope
 import com.rk.activities.main.MainViewModel
 import com.rk.activities.main.session.MarkdownPreviewTabState
 import com.rk.activities.main.session.TabState
-import com.rk.file.BuiltinFileType
 import com.rk.file.FileObject
-import com.rk.file.FileTypeManager
 import com.rk.file.FileWrapper
 import com.rk.icons.Menu_book
 import com.rk.icons.XedIcons
 import com.rk.lsp.MarkdownImageProvider
 import com.rk.resources.strings
-import com.rk.settings.Settings
 import com.rk.tabs.base.Tab
+import com.rk.tabs.base.TabRegistry
 import com.rk.utils.toast
 import io.github.rosemoe.sora.lsp.editor.text.SimpleMarkdownRenderer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLDecoder
@@ -183,9 +183,10 @@ class MarkdownTab(
                         val text = markdownText ?: ""
                         val cleanMd = removeUnsupportedHtmlTags(text)
                         try {
+                            val parentDir = withContext(Dispatchers.IO) { file.getParentFile() }
+                            MarkdownImageProvider.currentBaseDir = parentDir
                             val spanned =
                                 withContext(Dispatchers.IO) {
-                                    MarkdownImageProvider.currentBaseDir = file.getParentFile()
                                     val result =
                                         SimpleMarkdownRenderer.renderAsync(
                                             cleanMd,
@@ -315,38 +316,49 @@ class MarkdownTab(
             }
 
             else -> {
-                try {
-                    val cleanUrl = url.substringBefore('#').substringBefore('?')
-                    val decodedPath = URLDecoder.decode(cleanUrl, "UTF-8")
+                DefaultScope.launch(Dispatchers.IO) {
+                    try {
+                        val cleanUrl = url.substringBefore('#').substringBefore('?')
+                        val decodedPath = URLDecoder.decode(cleanUrl, "UTF-8")
 
-                    val targetFile: FileObject? =
-                        when {
-                            url.startsWith("/") -> FileWrapper(File(decodedPath))
-                            url.startsWith("file://") -> FileWrapper(File(decodedPath.removePrefix("file://")))
-                            else -> {
-                                val parent = currentFile.getParentFile()
-                                if (parent != null) {
-                                    val parentFile = File(parent.getAbsolutePath())
-                                    val resolved = File(parentFile, decodedPath).canonicalFile
-                                    FileWrapper(resolved)
-                                } else {
-                                    null
+                        val targetFile: FileObject? =
+                            when {
+                                url.startsWith("/") -> FileWrapper(File(decodedPath))
+                                url.startsWith("file://") -> FileWrapper(File(decodedPath.removePrefix("file://")))
+                                else -> {
+                                    val parent = currentFile.getParentFile()
+                                    if (parent != null) {
+                                        val parentFile = File(parent.getAbsolutePath())
+                                        val resolved = File(parentFile, decodedPath).canonicalFile
+                                        FileWrapper(resolved)
+                                    } else {
+                                        null
+                                    }
                                 }
                             }
-                        }
 
-                    if (targetFile != null && targetFile.exists()) {
-                        val isMarkdown = FileTypeManager.fromExtension(targetFile.getExtension()) == BuiltinFileType.MARKDOWN
-                        if (isMarkdown && Settings.default_markdown_preview) {
-                            viewModel.tabManager.openTab(MarkdownTab(targetFile, projectRoot, viewModel))
+                        if (targetFile != null && targetFile.exists()) {
+                            withContext(Dispatchers.Main) {
+                                val tab =
+                                    TabRegistry.getTab(
+                                        file = targetFile,
+                                        projectRoot = projectRoot,
+                                        viewModel = viewModel,
+                                        readOnly = false,
+                                        customTitle = null,
+                                    )
+                                viewModel.tabManager.addTab(tab, switchToTab = true)
+                            }
                         } else {
-                            viewModel.tabManager.openFile(targetFile)
+                            withContext(Dispatchers.Main) {
+                                toast("File not found: $decodedPath")
+                            }
                         }
-                    } else {
-                        toast("File not found: $decodedPath")
+                    } catch (_: Exception) {
+                        withContext(Dispatchers.Main) {
+                            toast("Failed to open link: $url")
+                        }
                     }
-                } catch (_: Exception) {
-                    toast("Failed to open link: $url")
                 }
             }
         }

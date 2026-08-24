@@ -38,7 +38,7 @@ object MarkdownRunner : FileRunner() {
                 currentTab.quickSave()
                 viewModel.tabManager.replaceTab(currentTab, markdownTab)
             } else {
-                viewModel.tabManager.openTab(markdownTab)
+                viewModel.tabManager.addTab(markdownTab, switchToTab = true)
             }
         }
     }
