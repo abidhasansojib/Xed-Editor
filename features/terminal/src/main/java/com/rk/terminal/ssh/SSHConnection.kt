@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
- * Manages an active SSH connection and interactive PTY shell channel using JSch.
+ * Manages an active SSH connection and interactive PTY shell channel using JSch with modern cipher support.
  */
 class SSHConnection(private val config: SSHConfig) {
     private var jschSession: Session? = null
@@ -59,6 +59,30 @@ class SSHConnection(private val config: SSHConfig) {
                 "PreferredAuthentications",
                 if (config.authType == "key") "publickey,keyboard-interactive,password"
                 else "password,keyboard-interactive,publickey",
+            )
+            session.setConfig(
+                "server_host_key",
+                "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
+            )
+            session.setConfig(
+                "PubkeyAcceptedAlgorithms",
+                "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
+            )
+            session.setConfig(
+                "PubkeyAcceptedKeyTypes",
+                "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
+            )
+            session.setConfig(
+                "cipher.s2c",
+                "chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-cbc,aes256-cbc,3des-cbc",
+            )
+            session.setConfig(
+                "cipher.c2s",
+                "chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-cbc,aes256-cbc,3des-cbc",
+            )
+            session.setConfig(
+                "kex",
+                "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1",
             )
             session.timeout = 20000
 
@@ -186,6 +210,26 @@ class SSHConnection(private val config: SSHConfig) {
                         "PreferredAuthentications",
                         if (config.authType == "key") "publickey,keyboard-interactive,password"
                         else "password,keyboard-interactive,publickey",
+                    )
+                    session.setConfig(
+                        "server_host_key",
+                        "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
+                    )
+                    session.setConfig(
+                        "PubkeyAcceptedAlgorithms",
+                        "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
+                    )
+                    session.setConfig(
+                        "cipher.s2c",
+                        "chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-cbc,aes256-cbc,3des-cbc",
+                    )
+                    session.setConfig(
+                        "cipher.c2s",
+                        "chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-cbc,aes256-cbc,3des-cbc",
+                    )
+                    session.setConfig(
+                        "kex",
+                        "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1",
                     )
                     session.timeout = 10000
                     session.connect(10000)

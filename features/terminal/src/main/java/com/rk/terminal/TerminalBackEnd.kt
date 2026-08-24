@@ -116,6 +116,17 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
     override fun copyModeChanged(copyMode: Boolean) {}
 
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+        if (Settings.use_ssh_terminal) {
+            val bridge = (session as? com.rk.terminal.ssh.SSHTerminalSession)?.bridge
+                ?: com.rk.terminal.ssh.SSHTerminalBridgeRegistry.getBridgeForSession(session)
+            if (bridge != null && bridge.isConnected) {
+                if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                    bridge.write("\r")
+                    return true
+                }
+            }
+        }
+
         if (keyCode == KeyEvent.KEYCODE_ENTER && !session.isRunning) {
             val activity = Terminal.instance ?: return false
             val sessionBinder = activity.sessionBinder?.get() ?: return false

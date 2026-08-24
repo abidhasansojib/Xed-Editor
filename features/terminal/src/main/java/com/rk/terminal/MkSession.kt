@@ -44,7 +44,7 @@ object MkSession {
             )
 
             val session =
-                TerminalSession(
+                com.rk.terminal.ssh.SSHTerminalSession(
                     "/system/bin/sh",
                     context.filesDir.absolutePath,
                     arrayOf("-c", "while true; do sleep 3600; done"),
