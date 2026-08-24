@@ -118,6 +118,11 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
         if (Settings.use_ssh_terminal) {
             val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
             if (bridge != null) {
+                if (!bridge.isConnected && keyCode == KeyEvent.KEYCODE_ENTER) {
+                    val emulator = terminalView.get()?.mEmulator
+                    bridge.reconnect(emulator?.mColumns ?: 80, emulator?.mRows ?: 24)
+                    return true
+                }
                 val escapeSeq =
                     when (keyCode) {
                         KeyEvent.KEYCODE_ENTER -> "\r"
@@ -191,6 +196,14 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
         if (Settings.use_ssh_terminal) {
             val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
             if (bridge != null) {
+                if (!bridge.isConnected) {
+                    if (codePoint == 10 || codePoint == 13) {
+                        val emulator = terminalView.get()?.mEmulator
+                        bridge.reconnect(emulator?.mColumns ?: 80, emulator?.mRows ?: 24)
+                        return true
+                    }
+                    return false
+                }
                 if (ctrlDown) {
                     val ctrlByte =
                         when (codePoint) {

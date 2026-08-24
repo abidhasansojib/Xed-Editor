@@ -50,7 +50,6 @@
             android:name="com.rk.activities.main.MainActivity"
             android:alwaysRetainTaskState="true"
             android:exported="true"
-            android:inputType="textFilter"
             android:launchMode="singleTask"
             android:persistableMode="persistAcrossReboots"
             android:windowSoftInputMode="adjustResize">

@@ -70,7 +70,9 @@ object MarkdownBlockParser {
     private fun parseNodeInto(node: Node, blocks: MutableList<MarkdownBlock>) {
         when (node) {
             is Heading -> {
-                blocks.add(MarkdownBlock.Heading(level = node.level, text = renderInlineText(node)))
+                val text = renderInlineText(node).trim()
+                val id = slugify(text)
+                blocks.add(MarkdownBlock.Heading(level = node.level, text = text, id = id))
             }
 
             is FencedCodeBlock -> {
@@ -96,34 +98,11 @@ object MarkdownBlockParser {
             }
 
             is BulletList -> {
-                var item: Node? = node.firstChild
-                while (item != null) {
-                    if (item is ListItem) {
-                        val text = renderInlineText(item).trim()
-                        val taskMatch = Regex("^\\[([ xX])\\]\\s*(.*)$").find(text)
-                        if (taskMatch != null) {
-                            val isChecked = taskMatch.groupValues[1].equals("x", ignoreCase = true)
-                            val content = taskMatch.groupValues[2]
-                            blocks.add(MarkdownBlock.TaskItem(isChecked = isChecked, text = content))
-                        } else {
-                            blocks.add(MarkdownBlock.ListItem(ordered = false, index = 0, text = text, depth = 0))
-                        }
-                    }
-                    item = item.next
-                }
+                parseBulletList(node, blocks, depth = 0)
             }
 
             is OrderedList -> {
-                var item: Node? = node.firstChild
-                var idx = node.startNumber
-                while (item != null) {
-                    if (item is ListItem) {
-                        val text = renderInlineText(item).trim()
-                        blocks.add(MarkdownBlock.ListItem(ordered = true, index = idx, text = text, depth = 0))
-                        idx++
-                    }
-                    item = item.next
-                }
+                parseOrderedList(node, blocks, depth = 0)
             }
 
             is ThematicBreak -> {
@@ -137,6 +116,15 @@ object MarkdownBlockParser {
                 val mathMatch = Regex("^\\$\\$([\\s\\S]*)\\$\\$$").find(raw)
                 if (mathMatch != null) {
                     blocks.add(MarkdownBlock.MathBlock(expression = mathMatch.groupValues[1].trim()))
+                    return
+                }
+
+                // Check for Obsidian image embed: ![[image.png]] or ![[image.png|alt]]
+                val obsidianImgMatch = Regex("^!\\[\\[([^|\\]]+)(?:\\|([^\\]]+))?\\]\\]$").find(raw)
+                if (obsidianImgMatch != null) {
+                    val imgUrl = obsidianImgMatch.groupValues[1].trim()
+                    val alt = obsidianImgMatch.groupValues[2].trim()
+                    blocks.add(MarkdownBlock.Image(alt = alt, url = imgUrl))
                     return
                 }
 
@@ -189,6 +177,73 @@ object MarkdownBlockParser {
 
             else -> {}
         }
+    }
+
+    private fun parseBulletList(list: BulletList, blocks: MutableList<MarkdownBlock>, depth: Int) {
+        var item: Node? = list.firstChild
+        while (item != null) {
+            if (item is ListItem) {
+                parseListItem(item, blocks, ordered = false, index = 0, depth = depth)
+            }
+            item = item.next
+        }
+    }
+
+    private fun parseOrderedList(list: OrderedList, blocks: MutableList<MarkdownBlock>, depth: Int) {
+        var item: Node? = list.firstChild
+        var idx = list.startNumber
+        while (item != null) {
+            if (item is ListItem) {
+                parseListItem(item, blocks, ordered = true, index = idx, depth = depth)
+                idx++
+            }
+            item = item.next
+        }
+    }
+
+    private fun parseListItem(
+        item: ListItem,
+        blocks: MutableList<MarkdownBlock>,
+        ordered: Boolean,
+        index: Int,
+        depth: Int,
+    ) {
+        var child = item.firstChild
+        val inlineParts = mutableListOf<String>()
+        val nestedLists = mutableListOf<Node>()
+
+        while (child != null) {
+            when (child) {
+                is Paragraph -> inlineParts.add(renderInlineText(child).trim())
+                is BulletList, is OrderedList -> nestedLists.add(child)
+                else -> inlineParts.add(renderInlineText(child).trim())
+            }
+            child = child.next
+        }
+
+        val text = inlineParts.joinToString(" ").trim()
+        val taskMatch = Regex("^\\[([ xX])\\]\\s*(.*)$").find(text)
+        if (taskMatch != null) {
+            val isChecked = taskMatch.groupValues[1].equals("x", ignoreCase = true)
+            val content = taskMatch.groupValues[2]
+            blocks.add(MarkdownBlock.TaskItem(isChecked = isChecked, text = content, depth = depth))
+        } else {
+            blocks.add(MarkdownBlock.ListItem(ordered = ordered, index = index, text = text, depth = depth))
+        }
+
+        for (nested in nestedLists) {
+            when (nested) {
+                is BulletList -> parseBulletList(nested, blocks, depth = depth + 1)
+                is OrderedList -> parseOrderedList(nested, blocks, depth = depth + 1)
+            }
+        }
+    }
+
+    private fun slugify(text: String): String {
+        return text.lowercase()
+            .replace(Regex("[^a-z0-9\\s-]"), "")
+            .replace(Regex("\\s+"), "-")
+            .trim('-')
     }
 
     private fun parseBlockQuote(node: BlockQuote): MarkdownBlock {

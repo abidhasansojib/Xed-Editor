@@ -87,7 +87,7 @@ fun EditorTab.CodeEditor(
         AndroidView(
             modifier = Modifier.weight(1f),
             onRelease = { it.release() },
-            update = { logInfo("Editor view update") },
+            update = {},
             factory = { ctx ->
                 Editor(ctx).apply {
                     logInfo("New Editor instance")

@@ -70,7 +70,7 @@ enum class AlertType(val label: String, val defaultTitle: String) {
  * Structured Markdown AST blocks supporting Obsidian & GitHub Flavored Markdown.
  */
 sealed interface MarkdownBlock {
-    data class Heading(val level: Int, val text: String) : MarkdownBlock
+    data class Heading(val level: Int, val text: String, val id: String = "") : MarkdownBlock
     data class Paragraph(val text: String) : MarkdownBlock
     data class CodeBlock(val language: String, val code: String) : MarkdownBlock
     data class Blockquote(val text: String) : MarkdownBlock
@@ -86,8 +86,8 @@ sealed interface MarkdownBlock {
         val alignments: List<TextAlign>,
         val rows: List<List<String>>,
     ) : MarkdownBlock
-    data class ListItem(val ordered: Boolean, val index: Int, val text: String, val depth: Int) : MarkdownBlock
-    data class TaskItem(val isChecked: Boolean, val text: String) : MarkdownBlock
+    data class ListItem(val ordered: Boolean, val index: Int, val text: String, val depth: Int = 0) : MarkdownBlock
+    data class TaskItem(val isChecked: Boolean, val text: String, val depth: Int = 0) : MarkdownBlock
     data class Image(val alt: String, val url: String) : MarkdownBlock
     data class MathBlock(val expression: String) : MarkdownBlock
     data class Footnote(val id: String, val text: String) : MarkdownBlock

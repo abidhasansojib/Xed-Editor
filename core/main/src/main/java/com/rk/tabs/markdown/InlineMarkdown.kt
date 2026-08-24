@@ -7,6 +7,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.sp
 import org.commonmark.ext.autolink.AutolinkExtension
@@ -45,7 +46,7 @@ object InlineMarkdown {
 
     private val PARSER = Parser.builder().extensions(EXTENSIONS).build()
 
-    // Obsidian inline tokens: ==highlight==, [[wikilink]], $math$, [^fn], #hashtag, <kbd>, <mark>, <u>
+    // Obsidian & GFM inline tokens: ==highlight==, [[wikilink]], $math$, [^fn], #hashtag, <kbd>, <u>, <sub>/~sub~, <sup>/^sup^
     private val OBSIDIAN_TOKEN_PATTERN: Pattern =
         Pattern.compile(
             "==([^=\\n]+)==|<mark>([^<]+)</mark>|" + // 1, 2: Highlight
@@ -54,7 +55,9 @@ object InlineMarkdown {
                 "<kbd>([^<]+)</kbd>|" + // 7: Kbd
                 "\\[\\^([^\\]\\n]+)\\]|" + // 8: Footnote
                 "<u>([^<]+)</u>|<ins>([^<]+)</ins>|" + // 9, 10: Underline
-                "(?:^|\\s)(#[a-zA-Z0-9_\\-/]+)", // 11: Hashtag
+                "<sub>([^<]+)</sub>|~([^~\\s\\n]+)~|" + // 11, 12: Subscript
+                "<sup>([^<]+)</sup>|\\^([^\\^\\s\\n]+)\\^|" + // 13, 14: Superscript
+                "(?:^|\\s)(#[a-zA-Z0-9_\\-/]+)", // 15: Hashtag
         )
 
     fun parse(
@@ -293,9 +296,25 @@ object InlineMarkdown {
                     pop()
                 }
 
+                // Subscript <sub>text</sub> / ~text~
+                matcher.group(11) != null || matcher.group(12) != null -> {
+                    val content = matcher.group(11) ?: matcher.group(12) ?: ""
+                    pushStyle(SpanStyle(baselineShift = BaselineShift.Subscript, fontSize = 11.sp))
+                    append(content)
+                    pop()
+                }
+
+                // Superscript <sup>text</sup> / ^text^
+                matcher.group(13) != null || matcher.group(14) != null -> {
+                    val content = matcher.group(13) ?: matcher.group(14) ?: ""
+                    pushStyle(SpanStyle(baselineShift = BaselineShift.Superscript, fontSize = 11.sp))
+                    append(content)
+                    pop()
+                }
+
                 // Hashtag #tag
-                matcher.group(11) != null -> {
-                    val tag = matcher.group(11) ?: ""
+                matcher.group(15) != null -> {
+                    val tag = matcher.group(15) ?: ""
                     pushStyle(
                         SpanStyle(
                             color = primaryColor,

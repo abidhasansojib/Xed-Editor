@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 object IntelligentFeatureRegistry {
-    val builtInFeatures = listOf(AutoCloseTag, BulletContinuation)
+    val builtInFeatures = listOf(AutoCloseTag, BulletContinuation, UniversalCodeIntelligence)
 
     private val _mutableFeatures = MutableStateFlow<List<IntelligentFeature>>(emptyList())
     val extensionFeatures: List<IntelligentFeature>

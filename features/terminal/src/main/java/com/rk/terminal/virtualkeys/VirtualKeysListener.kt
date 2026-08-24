@@ -29,6 +29,11 @@ class VirtualKeysListener(val session: TerminalSession) : VirtualKeysView.IVirtu
         if (Settings.use_ssh_terminal) {
             val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
             if (bridge != null) {
+                if (!bridge.isConnected && key == "ENTER") {
+                    val emulator = session.emulator
+                    bridge.reconnect(emulator?.mColumns ?: 80, emulator?.mRows ?: 24)
+                    return
+                }
                 bridge.write(writeable)
                 return
             }

@@ -148,9 +148,17 @@ class SSHConnection(private val config: SSHConfig) {
                 "kex",
                 "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1",
             )
-            session.timeout = 20000
+            session.setConfig("TCPKeepAlive", "yes")
+            session.setConfig("KeepAlive", "yes")
 
-            session.connect(15000)
+            // Set socket read timeout to 0 (infinite) for interactive sessions so it never closes due to inactivity
+            session.timeout = 0
+
+            // Send SSH keepalive packets every 10 seconds to keep the connection continuous and active
+            session.serverAliveInterval = 10000
+            session.serverAliveCountMax = 6
+
+            session.connect(20000)
             jschSession = session
 
             val safeCols = if (cols < 20) 80 else cols
@@ -166,7 +174,7 @@ class SSHConnection(private val config: SSHConfig) {
 
             val inStream: InputStream = channel.inputStream
 
-            channel.connect(15000)
+            channel.connect(20000)
             shellChannel = channel
             isConnectedFlag.set(true)
 
@@ -176,11 +184,15 @@ class SSHConnection(private val config: SSHConfig) {
                     var disconnectReason: String? = null
                     try {
                         while (isConnectedFlag.get() && channel.isConnected) {
-                            val read = inStream.read(buffer)
-                            if (read == -1) break
-                            if (read > 0) {
-                                val chunk = buffer.copyOf(read)
-                                onData(chunk, read)
+                            try {
+                                val read = inStream.read(buffer)
+                                if (read == -1) break
+                                if (read > 0) {
+                                    val chunk = buffer.copyOf(read)
+                                    onData(chunk, read)
+                                }
+                            } catch (_: java.net.SocketTimeoutException) {
+                                if (!isConnectedFlag.get() || !channel.isConnected) break
                             }
                         }
                     } catch (e: Exception) {

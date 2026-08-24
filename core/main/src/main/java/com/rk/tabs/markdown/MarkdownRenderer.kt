@@ -102,7 +102,7 @@ fun MarkdownView(
     val footnotes = remember(blocks) { blocks.filterIsInstance<MarkdownBlock.Footnote>() }
 
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         regularBlocks.forEach { block ->
@@ -157,13 +157,13 @@ private fun RenderBlock(
         is MarkdownBlock.Blockquote -> RenderBlockquote(block.text, currentFile, projectRoot, viewModel)
         is MarkdownBlock.ListItem -> RenderListItem(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.TaskItem -> RenderTaskItem(block, currentFile, projectRoot, viewModel)
-        is MarkdownBlock.Image -> RenderImage(block, baseDirPath, imageLoader)
+        is MarkdownBlock.Image -> RenderImage(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
         is MarkdownBlock.MathBlock -> RenderMathBlock(block)
         is MarkdownBlock.Footnote -> {}
         MarkdownBlock.HorizontalRule -> {
             HorizontalDivider(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             )
         }
     }
@@ -178,12 +178,12 @@ private fun RenderHeading(
 ) {
     val style =
         when (heading.level) {
-            1 -> MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold, fontSize = 28.sp)
-            2 -> MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, fontSize = 23.sp)
-            3 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 19.sp)
-            4 -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-            5 -> MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            else -> MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            1 -> MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, fontSize = 24.sp)
+            2 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            3 -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            4 -> MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            5 -> MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            else -> MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         }
 
     val primaryColor =
@@ -206,26 +206,43 @@ private fun RenderHeading(
             )
         }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = if (heading.level <= 2) 8.dp else 4.dp)) {
-        ClickableText(
-            text = annotated,
-            style = style.copy(color = primaryColor),
-            onClick = { offset ->
-                annotated.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let { annotation ->
-                    handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
-                    return@ClickableText
-                }
-                annotated.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let { annotation ->
-                    handleWikilinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
-                    return@ClickableText
-                }
-            },
-        )
+    Column(modifier = Modifier.fillMaxWidth().padding(top = if (heading.level <= 2) 6.dp else 2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (heading.level == 1 || heading.level == 2) {
+                Box(
+                    modifier =
+                        Modifier.width(3.5.dp)
+                            .height(if (heading.level == 1) 22.dp else 18.dp)
+                            .background(
+                                color = if (heading.level == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                shape = RoundedCornerShape(2.dp),
+                            ),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
+            ClickableText(
+                text = annotated,
+                style = style.copy(color = primaryColor),
+                onClick = { offset ->
+                    annotated.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                        handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
+                        return@ClickableText
+                    }
+                    annotated.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                        handleWikilinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
+                        return@ClickableText
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
         if (heading.level <= 2) {
             HorizontalDivider(
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = if (heading.level == 1) 0.5f else 0.25f),
-                thickness = if (heading.level == 1) 2.dp else 1.dp,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (heading.level == 1) 0.4f else 0.2f),
+                thickness = if (heading.level == 1) 1.5.dp else 1.dp,
             )
         }
     }
@@ -237,6 +254,8 @@ private fun RenderParagraph(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    isStrikethrough: Boolean = false,
+    isSubdued: Boolean = false,
 ) {
     val context = LocalContext.current
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -253,9 +272,22 @@ private fun RenderParagraph(
             )
         }
 
+    val textColor =
+        if (isSubdued) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+        else MaterialTheme.colorScheme.onSurface
+
+    val textDecoration =
+        if (isStrikethrough) androidx.compose.ui.text.style.TextDecoration.LineThrough
+        else androidx.compose.ui.text.style.TextDecoration.None
+
     ClickableText(
         text = annotated,
-        style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface, lineHeight = 24.sp),
+        style =
+            MaterialTheme.typography.bodyLarge.copy(
+                color = textColor,
+                lineHeight = 23.sp,
+                textDecoration = textDecoration,
+            ),
         onClick = { offset ->
             annotated.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let { annotation ->
                 handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
@@ -272,6 +304,7 @@ private fun RenderParagraph(
 @Composable
 private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
     var copied by remember { mutableStateOf(false) }
+    var wrapCode by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
@@ -286,7 +319,7 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
                 modifier =
                     Modifier.fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -296,28 +329,42 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
                     color = MaterialTheme.colorScheme.primary,
                 )
 
-                IconButton(
-                    onClick = {
-                        ClipboardUtils.copyText("Code", codeBlock.code)
-                        copied = true
-                        toast("Code copied to clipboard")
-                    },
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    if (copied) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Copied",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp),
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Wrap lines toggle button for mobile display
+                    IconButton(
+                        onClick = { wrapCode = !wrapCode },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Text(
+                            text = if (wrapCode) "⇄" else "↵",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = if (wrapCode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    } else {
-                        Icon(
-                            painter = painterResource(drawables.copy),
-                            contentDescription = "Copy code",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            ClipboardUtils.copyText("Code", codeBlock.code)
+                            copied = true
+                            toast("Code copied to clipboard")
+                        },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        if (copied) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Copied",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        } else {
+                            Icon(
+                                painter = painterResource(drawables.copy),
+                                contentDescription = "Copy code",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -326,16 +373,16 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
             Box(
                 modifier =
                     Modifier.fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .then(if (!wrapCode) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
                 Text(
                     text = codeBlock.code,
                     style =
                         MaterialTheme.typography.bodyMedium.copy(
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 13.5.sp,
-                            lineHeight = 20.sp,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
                         ),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -491,20 +538,20 @@ private fun RenderTable(
     val context = LocalContext.current
 
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(8.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
     ) {
         Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            Column(modifier = Modifier.padding(2.dp)) {
+            Column(modifier = Modifier.padding(1.dp)) {
                 // Header Row
                 Row(
                     modifier =
                         Modifier.background(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                            RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp),
-                        ).padding(vertical = 10.dp, horizontal = 4.dp),
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                        ).padding(vertical = 8.dp, horizontal = 4.dp),
                 ) {
                     table.headers.forEachIndexed { colIdx, header ->
                         val align = table.alignments.getOrElse(colIdx) { TextAlign.Left }
@@ -514,7 +561,7 @@ private fun RenderTable(
                             }
                         Box(
                             modifier =
-                                Modifier.widthIn(min = 100.dp, max = 320.dp)
+                                Modifier.widthIn(min = 80.dp, max = 280.dp)
                                     .padding(horizontal = 8.dp),
                         ) {
                             ClickableText(
@@ -524,6 +571,7 @@ private fun RenderTable(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         textAlign = align,
+                                        fontSize = 13.5.sp,
                                     ),
                                 onClick = { offset ->
                                     annotatedHeader.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let {
@@ -541,14 +589,14 @@ private fun RenderTable(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                // Data Rows
+                // Data Rows with zebra striping for mobile
                 table.rows.forEachIndexed { rowIdx, row ->
                     val rowBg =
                         if (rowIdx % 2 == 0) MaterialTheme.colorScheme.surface
-                        else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f)
+                        else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.25f)
 
                     Row(
-                        modifier = Modifier.background(rowBg).padding(vertical = 8.dp, horizontal = 4.dp),
+                        modifier = Modifier.background(rowBg).padding(vertical = 6.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         row.forEachIndexed { colIdx, cell ->
@@ -559,12 +607,17 @@ private fun RenderTable(
                                 }
                             Box(
                                 modifier =
-                                    Modifier.widthIn(min = 100.dp, max = 320.dp)
+                                    Modifier.widthIn(min = 80.dp, max = 280.dp)
                                         .padding(horizontal = 8.dp),
                             ) {
                                 ClickableText(
                                     text = annotatedCell,
-                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface, textAlign = align),
+                                    style =
+                                        MaterialTheme.typography.bodyMedium.copy(
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            textAlign = align,
+                                            fontSize = 13.5.sp,
+                                        ),
                                     onClick = { offset ->
                                         annotatedCell.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let {
                                             handleLinkClick(it.item, currentFile, projectRoot, viewModel, context)
@@ -580,7 +633,7 @@ private fun RenderTable(
                     }
 
                     if (rowIdx < table.rows.lastIndex) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
                     }
                 }
             }
@@ -621,7 +674,7 @@ private fun RenderListItem(
     projectRoot: FileObject?,
     viewModel: MainViewModel,
 ) {
-    val indent = (item.depth * 16).dp
+    val indent = (item.depth * 14).dp
     val bullet =
         if (item.ordered) "${item.index}."
         else when (item.depth % 3) {
@@ -638,7 +691,7 @@ private fun RenderListItem(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                 ),
-            modifier = Modifier.width(if (item.ordered) 28.dp else 16.dp),
+            modifier = Modifier.width(if (item.ordered) 26.dp else 16.dp),
         )
         RenderParagraph(item.text, currentFile, projectRoot, viewModel)
     }
@@ -651,31 +704,71 @@ private fun RenderTaskItem(
     projectRoot: FileObject?,
     viewModel: MainViewModel,
 ) {
+    var isChecked by remember(task.isChecked) { mutableStateOf(task.isChecked) }
+    val indent = (task.depth * 14).dp
+
     Row(
-        modifier = Modifier.padding(vertical = 2.dp),
+        modifier = Modifier.padding(start = indent, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(
-            checked = task.isChecked,
-            onCheckedChange = null,
-            modifier = Modifier.size(24.dp).padding(end = 6.dp),
+            checked = isChecked,
+            onCheckedChange = { checked ->
+                isChecked = checked
+            },
+            modifier = Modifier.size(22.dp).padding(end = 4.dp),
         )
         Spacer(modifier = Modifier.width(6.dp))
-        RenderParagraph(task.text, currentFile, projectRoot, viewModel)
+        RenderParagraph(
+            text = task.text,
+            currentFile = currentFile,
+            projectRoot = projectRoot,
+            viewModel = viewModel,
+            isStrikethrough = isChecked,
+            isSubdued = isChecked,
+        )
     }
 }
 
 @Composable
 private fun RenderImage(
     image: MarkdownBlock.Image,
+    currentFile: FileObject,
+    projectRoot: FileObject?,
+    viewModel: MainViewModel,
     baseDirPath: String?,
     imageLoader: ImageLoader,
 ) {
     val context = LocalContext.current
     val model = remember(image.url, baseDirPath) { resolveImageModel(image.url, baseDirPath, context) }
+    var loadFailed by remember { mutableStateOf(false) }
 
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
+        modifier =
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable {
+                    if (model is File && model.exists()) {
+                        val imageTab = TabRegistry.getTab(
+                            file = FileWrapper(model),
+                            projectRoot = projectRoot,
+                            viewModel = viewModel,
+                            readOnly = true,
+                            customTitle = null,
+                        )
+                        viewModel.tabManager.addTab(imageTab, switchToTab = true)
+                    } else if (image.url.startsWith("http://") || image.url.startsWith("https://")) {
+                        try {
+                            val customTabsIntent = CustomTabsIntent.Builder().setShowTitle(true).build()
+                            customTabsIntent.launchUrl(context, Uri.parse(image.url))
+                        } catch (_: Exception) {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(image.url))
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                },
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
@@ -684,24 +777,51 @@ private fun RenderImage(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            AsyncImage(
-                model = model,
-                contentDescription = image.alt,
-                imageLoader = imageLoader,
-                contentScale = ContentScale.Inside,
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .height(240.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-            )
-
-            if (image.alt.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = image.alt,
-                    style = MaterialTheme.typography.labelMedium.copy(fontStyle = FontStyle.Italic),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            if (loadFailed) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        painter = painterResource(drawables.error),
+                        contentDescription = "Image not found",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (image.alt.isNotBlank()) image.alt else "Image not found",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = image.url,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                AsyncImage(
+                    model = model,
+                    contentDescription = image.alt,
+                    imageLoader = imageLoader,
+                    contentScale = ContentScale.Fit,
+                    onError = { loadFailed = true },
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .heightIn(min = 60.dp, max = 360.dp)
+                            .clip(RoundedCornerShape(8.dp)),
                 )
+
+                if (image.alt.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = image.alt,
+                        style = MaterialTheme.typography.labelMedium.copy(fontStyle = FontStyle.Italic),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         }
     }
@@ -726,7 +846,26 @@ private fun resolveImageModel(rawUrl: String, baseDirPath: String?, context: Con
                 val cleanUrl = trimmed.substringBefore('#').substringBefore('?')
                 val decodedPath = URLDecoder.decode(cleanUrl, "UTF-8")
                 if (baseDirPath != null) {
-                    File(File(baseDirPath), decodedPath).canonicalFile
+                    val base = File(baseDirPath)
+                    val direct = File(base, decodedPath).canonicalFile
+                    if (direct.exists()) return direct
+
+                    val assetsCandidate = File(File(base, "assets"), decodedPath).canonicalFile
+                    if (assetsCandidate.exists()) return assetsCandidate
+
+                    val attachmentsCandidate = File(File(base, "attachments"), decodedPath).canonicalFile
+                    if (attachmentsCandidate.exists()) return attachmentsCandidate
+
+                    val imagesCandidate = File(File(base, "images"), decodedPath).canonicalFile
+                    if (imagesCandidate.exists()) return imagesCandidate
+
+                    val parent = base.parentFile
+                    if (parent != null) {
+                        val parentDirect = File(parent, decodedPath).canonicalFile
+                        if (parentDirect.exists()) return parentDirect
+                    }
+
+                    direct
                 } else {
                     trimmed
                 }

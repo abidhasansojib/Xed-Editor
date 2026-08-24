@@ -45,12 +45,18 @@ class SSHTerminalBridge(
         }
     }
 
+    fun reconnect(cols: Int = 80, rows: Int = 24, width: Int = 0, height: Int = 0) {
+        disconnect()
+        start(cols, rows, width, height)
+    }
+
     fun start(cols: Int = 80, rows: Int = 24, width: Int = 0, height: Int = 0) {
         if (active.getAndSet(true)) return
 
         val config = SSHConfig.loadFromSettings()
 
         if (!config.isConfigured()) {
+            active.set(false)
             appendToEmulator(
                 "\r\n\u001B[1;33m[SSH Terminal Mode Active]\u001B[0m\r\n" +
                     "\u001B[0;31mSSH Host or Username is not configured.\u001B[0m\r\n" +
@@ -79,9 +85,9 @@ class SSHTerminalBridge(
                     val msg =
                         if (reason != null) {
                             "\r\n\u001B[1;31m[SSH Connection error: $reason]\u001B[0m\r\n" +
-                                "\u001B[0;33mCheck SSH credentials in Settings -> Terminal.\u001B[0m\r\n\r\n"
+                                "\u001B[0;33mPress Enter to reconnect, or check SSH credentials in Settings -> Terminal.\u001B[0m\r\n\r\n"
                         } else {
-                            "\r\n\u001B[1;33m[SSH Session closed]\u001B[0m\r\n"
+                            "\r\n\u001B[1;33m[SSH Session closed - Press Enter to reconnect]\u001B[0m\r\n"
                         }
                     appendToEmulator(msg)
                     active.set(false)

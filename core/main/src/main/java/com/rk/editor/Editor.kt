@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Typeface
 import android.text.InputType
 import android.util.AttributeSet
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.surfaceColorAtElevation
@@ -318,10 +320,38 @@ class Editor : CodeEditor {
     fun showSuggestions(yes: Boolean) {
         inputType =
             if (yes) {
-                InputType.TYPE_TEXT_VARIATION_NORMAL
+                InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE
             } else {
-                InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
             }
+    }
+
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+        val connection = super.onCreateInputConnection(outAttrs) ?: return null
+
+        outAttrs.inputType = inputType
+        outAttrs.imeOptions =
+            outAttrs.imeOptions or
+                EditorInfo.IME_FLAG_NO_FULLSCREEN or
+                EditorInfo.IME_FLAG_NO_EXTRACT_UI or
+                EditorInfo.IME_ACTION_NONE
+
+        try {
+            if (isTextSelected) {
+                outAttrs.initialSelStart = cursorRange.startIndex
+                outAttrs.initialSelEnd = cursorRange.endIndex
+            } else {
+                val cursorIdx = cursorRange.startIndex
+                outAttrs.initialSelStart = cursorIdx
+                outAttrs.initialSelEnd = cursorIdx
+            }
+        } catch (_: Exception) {}
+
+        return connection
     }
 
     suspend fun configureLanguage(textmateScope: String) {
