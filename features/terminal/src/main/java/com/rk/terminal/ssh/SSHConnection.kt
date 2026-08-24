@@ -166,7 +166,8 @@ class SSHConnection(private val config: SSHConfig) {
                             val read = inStream.read(buffer)
                             if (read == -1) break
                             if (read > 0) {
-                                onData(buffer, read)
+                                val chunk = buffer.copyOf(read)
+                                onData(chunk, read)
                             }
                         }
                     } catch (e: Exception) {
@@ -187,8 +188,7 @@ class SSHConnection(private val config: SSHConfig) {
     }
 
     fun write(data: ByteArray, offset: Int = 0, count: Int = data.size) {
-        if (!isConnected) return
-        val chunk = if (offset == 0 && count == data.size) data else data.copyOfRange(offset, offset + count)
+        val chunk = if (offset == 0 && count == data.size) data.copyOf() else data.copyOfRange(offset, offset + count)
         queueIn?.enqueue(chunk)
     }
 
@@ -197,7 +197,6 @@ class SSHConnection(private val config: SSHConfig) {
     }
 
     fun resize(cols: Int, rows: Int, width: Int = 0, height: Int = 0) {
-        if (!isConnected) return
         try {
             shellChannel?.setPtySize(cols, rows, width, height)
         } catch (_: Exception) {}

@@ -117,7 +117,7 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
         if (Settings.use_ssh_terminal) {
             val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
-            if (bridge != null && bridge.isConnected) {
+            if (bridge != null) {
                 val escapeSeq =
                     when (keyCode) {
                         KeyEvent.KEYCODE_ENTER -> "\r"
@@ -141,6 +141,7 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
                 }
                 return false
             }
+            return false
         }
 
         if (keyCode == KeyEvent.KEYCODE_ENTER && !session.isRunning) {
@@ -189,7 +190,7 @@ class TerminalBackEnd : TerminalViewClient, TerminalSessionClient {
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
         if (Settings.use_ssh_terminal) {
             val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
-            if (bridge != null && bridge.isConnected) {
+            if (bridge != null) {
                 if (ctrlDown) {
                     val ctrlByte =
                         when (codePoint) {

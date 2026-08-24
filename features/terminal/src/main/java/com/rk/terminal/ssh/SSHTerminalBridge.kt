@@ -30,17 +30,16 @@ class SSHTerminalBridge(
     val isConnected: Boolean
         get() = active.get() && (sshConnection?.isConnected == true)
 
-
-
     fun appendToEmulator(text: String) {
         val bytes = text.toByteArray(StandardCharsets.UTF_8)
         appendToEmulator(bytes, bytes.size)
     }
 
     fun appendToEmulator(data: ByteArray, count: Int) {
+        val copy = if (data.size == count) data.copyOf() else data.copyOf(count)
         mainHandler.post {
             try {
-                session.emulator?.append(data, count)
+                session.emulator?.append(copy, copy.size)
                 sessionClient.onTextChanged(session)
             } catch (_: Exception) {}
         }
@@ -55,13 +54,13 @@ class SSHTerminalBridge(
             appendToEmulator(
                 "\r\n\u001B[1;33m[SSH Terminal Mode Active]\u001B[0m\r\n" +
                     "\u001B[0;31mSSH Host or Username is not configured.\u001B[0m\r\n" +
-                    "\u001B[0;37mPlease go to Settings -> Terminal to configure your SSH credentials.\u001B[0m\r\n\r\n"
+                    "\u001B[0;37mPlease go to Settings -> Terminal to configure your SSH credentials.\u001B[0m\r\n\r\n",
             )
             return
         }
 
         appendToEmulator(
-            "\r\n\u001B[1;36mConnecting to ${config.username}@${config.host}:${config.port}...\u001B[0m\r\n"
+            "\r\n\u001B[1;36mConnecting to ${config.username}@${config.host}:${config.port}...\u001B[0m\r\n",
         )
 
         val connection = SSHConnection(config)
