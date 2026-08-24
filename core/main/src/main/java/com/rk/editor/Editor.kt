@@ -325,8 +325,7 @@ class Editor : CodeEditor {
             } else {
                 InputType.TYPE_CLASS_TEXT or
                     InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
-                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-                    InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE
             }
     }
 

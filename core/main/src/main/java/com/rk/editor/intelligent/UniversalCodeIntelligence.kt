@@ -7,9 +7,8 @@ import io.github.rosemoe.sora.event.EditorKeyEvent
 
 /**
  * Built-in zero-install universal code intelligence engine.
- * Provides intelligent indentation, smart block expansion on Enter, colon expansion (Python),
- * auto-closing pair management, and bracket step-over for all major languages:
- * HTML, CSS, JavaScript, TypeScript, Java, C, C++, Rust, Python, Go, Kotlin, C#, Swift, PHP, Ruby, SQL, JSON, YAML, Bash, Lua, etc.
+ * Provides intelligent indentation, smart block expansion on Enter, and colon expansion (Python)
+ * for all major languages without interfering with editor text-change listeners.
  */
 object UniversalCodeIntelligence : IntelligentFeature() {
     override val id: String = "universal.code_intelligence"
@@ -24,8 +23,6 @@ object UniversalCodeIntelligence : IntelligentFeature() {
         "py", "pyw", "rb", "php", "sh", "bash", "zsh", "lua", "r", "sql", "pl", "pm", "groovy"
     )
 
-    override val triggerCharacters: List<Char> = listOf('{', '(', '[', '"', '\'', '`', ':', '}')
-
     override fun handleKeyEvent(event: EditorKeyEvent, editor: Editor) {
         if (event.action != KeyEvent.ACTION_DOWN) return
 
@@ -36,64 +33,16 @@ object UniversalCodeIntelligence : IntelligentFeature() {
         }
     }
 
-    override fun handleInsertChar(triggerCharacter: Char, editor: Editor) {
-        if (editor.cursor.isSelected) return
-        val lineIdx = editor.cursor.leftLine
-        val colIdx = editor.cursor.leftColumn
-        val line = editor.text.getLine(lineIdx).toString()
-
-        // Auto-close brackets and quotes if enabled
-        if (!Settings.auto_closing_bracket) return
-
-        when (triggerCharacter) {
-            '{' -> autoClosePair(editor, lineIdx, colIdx, '}')
-            '(' -> autoClosePair(editor, lineIdx, colIdx, ')')
-            '[' -> autoClosePair(editor, lineIdx, colIdx, ']')
-            '`' -> autoCloseQuote(editor, lineIdx, colIdx, '`', line)
-            '"' -> autoCloseQuote(editor, lineIdx, colIdx, '"', line)
-            '\'' -> autoCloseQuote(editor, lineIdx, colIdx, '\'', line)
-        }
-    }
-
-    private fun autoClosePair(editor: Editor, lineIdx: Int, colIdx: Int, closingChar: Char) {
-        val line = editor.text.getLine(lineIdx).toString()
-        val nextChar = if (colIdx < line.length) line[colIdx] else null
-
-        // Only insert closing pair if at end of line or before whitespace/closing bracket
-        if (nextChar == null || nextChar.isWhitespace() || nextChar in ")}];,") {
-            editor.text.insert(lineIdx, colIdx, closingChar.toString())
-            editor.setSelection(lineIdx, colIdx)
-        }
-    }
-
-    private fun autoCloseQuote(editor: Editor, lineIdx: Int, colIdx: Int, quoteChar: Char, line: String) {
-        val prevChar = if (colIdx >= 2) line[colIdx - 2] else null
-        val nextChar = if (colIdx < line.length) line[colIdx] else null
-
-        // Avoid auto-closing if escaped with backslash
-        if (prevChar == '\\') return
-
-        // If next char is already the quote (and not preceded by escape), step over
-        if (nextChar == quoteChar) {
-            // Remove the redundant quote and move cursor forward
-            editor.text.delete(lineIdx, colIdx - 1, lineIdx, colIdx)
-            editor.setSelection(lineIdx, colIdx)
-            return
-        }
-
-        // Only auto-close if at end of line or before delimiter
-        if (nextChar == null || nextChar.isWhitespace() || nextChar in ")}];,+-*/%=") {
-            editor.text.insert(lineIdx, colIdx, quoteChar.toString())
-            editor.setSelection(lineIdx, colIdx)
-        }
-    }
-
     private fun handleEnter(editor: Editor): Boolean {
         if (editor.isTextSelected) return false
         val lineIdx = editor.cursor.leftLine
         val colIdx = editor.cursor.leftColumn
 
+        if (lineIdx < 0 || lineIdx >= editor.text.lineCount) return false
+
         val line = editor.text.getLine(lineIdx).toString()
+        if (colIdx < 0 || colIdx > line.length) return false
+
         val textBefore = line.take(colIdx)
         val textAfter = line.substring(colIdx)
 
@@ -112,7 +61,7 @@ object UniversalCodeIntelligence : IntelligentFeature() {
             return true
         }
 
-        // Case 2: Enter after line ending with { or : (Python, C, C++, Java, JS, Rust, Go, etc.)
+        // Case 2: Enter after line ending with { or : or [ (Python, C, C++, Java, JS, Rust, Go, etc.)
         val trimmedBefore = textBefore.trimEnd()
         if (trimmedBefore.endsWith("{") || trimmedBefore.endsWith(":") || trimmedBefore.endsWith("[")) {
             val content = "\n$indentString$tabIndent"
