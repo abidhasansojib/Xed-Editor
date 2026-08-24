@@ -54,7 +54,6 @@ import com.rk.search.EditorSearchPanel
 import com.rk.search.FindingsDialog
 import com.rk.settings.Settings
 import com.rk.settings.editor.refreshEditorSettings
-import com.rk.settings.support.handleSupport
 import com.rk.tabs.base.Tab
 import com.rk.utils.errorDialog
 import com.rk.utils.hasBinaryChars
@@ -423,7 +422,6 @@ open class EditorTab(
         Events.publish(EditorTabEvent.Saved(this, file, false))
 
         Settings.saves += 1
-        MainActivity.instance?.handleSupport()
     }
 
     @XedExtensionPoint

@@ -34,7 +34,6 @@ import com.rk.lsp.LspRegistry
 import com.rk.resources.getFilledString
 import com.rk.resources.strings
 import com.rk.settings.Settings
-import com.rk.settings.support.handleSupport
 import com.rk.tabs.editor.applyHighlightingAndConnectLSP
 import com.rk.utils.errorDialog
 import com.rk.utils.toast
@@ -96,9 +95,6 @@ class MainActivity : AppCompatActivity() {
                     }
                     .forEach { it.applyHighlightingAndConnectLSP() }
             }
-
-            delay(1000.milliseconds)
-            handleSupport()
         }
     }
 

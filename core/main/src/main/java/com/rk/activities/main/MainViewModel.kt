@@ -7,7 +7,6 @@ import com.rk.activities.main.session.EditorManager
 import com.rk.activities.main.session.SessionManager
 import com.rk.activities.main.session.TabManager
 import com.rk.commands.Command
-import com.rk.extension.model.ExtensionManifest
 import com.rk.file.FileObject
 import com.rk.settings.Settings
 import com.rk.tabs.base.Tab
@@ -36,12 +35,6 @@ fun List<EditorTab>.filterWithFiles(predicate: (EditorTab, FileObject) -> Boolea
         }
         .map { it.key }
 }
-
-data class PendingExtensionInstall(
-    val manifest: ExtensionManifest,
-    val packageFile: File,
-    val icon: File,
-)
 
 class MainViewModel : ViewModel() {
     val tabManager = TabManager()
@@ -74,34 +67,12 @@ class MainViewModel : ViewModel() {
 
     private val _commandPaletteInitialPlaceholder = MutableStateFlow<String?>(null)
     val commandPaletteInitialPlaceholder = _commandPaletteInitialPlaceholder.asStateFlow()
-
-    private val _pendingExtensionInstall = MutableStateFlow<PendingExtensionInstall?>(null)
-
-    val pendingExtensionInstall: StateFlow<PendingExtensionInstall?> = _pendingExtensionInstall
-
     fun setShowTopBar(value: Boolean) {
         _showTopBar.value = value
     }
 
     fun setDraggingPalette(value: Boolean) {
         _isDraggingPalette.value = value
-    }
-
-    fun openExtensionIntentDialog(manifest: ExtensionManifest, file: File, icon: File) {
-        _pendingExtensionInstall.value = PendingExtensionInstall(manifest, file, icon)
-    }
-
-    fun closeExtensionIntentDialog() {
-        val pendingInstall = _pendingExtensionInstall.value
-
-        viewModelScope.launch(Dispatchers.Main) {
-            _pendingExtensionInstall.value = null
-
-            withContext(Dispatchers.IO) {
-                pendingInstall?.icon?.delete()
-                pendingInstall?.packageFile?.delete()
-            }
-        }
     }
 
     fun showCommandPalette() {

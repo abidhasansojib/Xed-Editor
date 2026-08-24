@@ -90,11 +90,9 @@ open class App : Application() {
         GlobalScope.launch(Dispatchers.IO) {
             launch(Dispatchers.IO) {
                 iconPackManager.indexLocalPacks()
-                iconPackManager.indexStoreIconPacks()
             }
             launch(Dispatchers.IO) {
                 themeManager.indexLocalThemes()
-                themeManager.indexStoreThemes()
             }
 
             launch { LanguageManager.initGrammarRegistry() }

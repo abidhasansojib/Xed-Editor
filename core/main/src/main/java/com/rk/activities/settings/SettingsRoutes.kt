@@ -9,8 +9,6 @@ sealed class SettingsRoutes(val route: String) {
 
     data object Keybindings : SettingsRoutes("keybindings")
 
-    data object About : SettingsRoutes("about")
-
     data object EditorFontScreen : SettingsRoutes("editor_font_screen")
 
     data object AppFontScreen : SettingsRoutes("app_font_screen")
@@ -25,17 +23,9 @@ sealed class SettingsRoutes(val route: String) {
 
     data object ExcludeFiles : SettingsRoutes("exclude_files")
 
-    data object Extensions : SettingsRoutes("extensions")
-
-    data object ExtensionDetail : SettingsRoutes("extension_detail")
-
-    data object ExtensionSettings : SettingsRoutes("extension_settings")
-
     data object DeveloperOptions : SettingsRoutes("developer_options")
 
     data object AppLogs : SettingsRoutes("app_logs")
-
-    data object Support : SettingsRoutes("support")
 
     data object Formatters : SettingsRoutes("formatters")
 
@@ -47,10 +37,6 @@ sealed class SettingsRoutes(val route: String) {
 
     data object Themes : SettingsRoutes("theme")
 
-    data object ThemeDetail : SettingsRoutes("theme_detail")
-
-    data object IconPackDetail : SettingsRoutes("icon_pack_detail")
-
     data object LspSettings : SettingsRoutes("lsp_settings")
 
     data object LspServerDetail : SettingsRoutes("lsp_server_detail")
@@ -58,6 +44,4 @@ sealed class SettingsRoutes(val route: String) {
     data object LspInitializationOptions : SettingsRoutes("lsp_initialization_options")
 
     data object LspServerLogs : SettingsRoutes("lsp_server_logs")
-
-    data object Git : SettingsRoutes("git")
 }

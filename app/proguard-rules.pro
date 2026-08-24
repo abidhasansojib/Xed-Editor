@@ -242,10 +242,6 @@
 -keep class org.eclipse.lsp4j.** { *; }
 -dontwarn org.eclipse.lsp4j.**
 
-# JGit
--keep class org.eclipse.jgit.** { *; }
--dontwarn org.eclipse.jgit.**
-
 # Joni / Jcodings (Regex Library)
 -keep class org.jruby.joni.** { *; }
 -keep class org.jruby.jcodings.** { *; }

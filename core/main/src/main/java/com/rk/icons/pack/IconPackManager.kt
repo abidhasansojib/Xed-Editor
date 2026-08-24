@@ -2,11 +2,7 @@ package com.rk.icons.pack
 
 import android.app.Application
 import androidx.compose.runtime.mutableStateOf
-import androidx.core.content.pm.PackageInfoCompat
-import com.rk.DefaultScope
 import com.rk.activities.settings.SettingsActivity
-import com.rk.common.XedPackage
-import com.rk.extension.manager.StoreManager
 import com.rk.extension.model.PackageCache
 import com.rk.file.FileOperations
 import com.rk.file.FileWrapper
@@ -17,7 +13,6 @@ import com.rk.resources.getFilledString
 import com.rk.resources.getString
 import com.rk.resources.strings
 import com.rk.settings.Settings
-import com.rk.utils.application
 import com.rk.utils.dialogRes
 import com.rk.utils.logError
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +21,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -57,26 +51,11 @@ class IconPackManager(private val context: Application) : CoroutineScope by Coro
 
     private val _localIconPacks = MutableStateFlow<Map<String, LocalIconPack>>(emptyMap())
     val localIconPacks: StateFlow<Map<String, LocalIconPack>> = _localIconPacks.asStateFlow()
-    private val _storeIconPacks = MutableStateFlow<Map<String, StoreIconPack>>(emptyMap())
-    val storeIconPacks: StateFlow<Map<String, StoreIconPack>> = _storeIconPacks.asStateFlow()
 
     fun isInstalled(id: String) = localIconPacks.value.containsKey(id)
 
     fun getIconPackPackage(id: String): IconPackPackage? {
-        val local = localIconPacks.value[id]
-        val store = storeIconPacks.value[id]
-
-        return when {
-            local != null && store != null -> UpdatableIconPack(local, store)
-            local != null -> local
-            store != null -> store
-            else -> null
-        }
-    }
-
-    fun getSyncedIconPacks(): List<IconPackPackage> {
-        val allIds = localIconPacks.value.keys + storeIconPacks.value.keys
-        return allIds.mapNotNull { getIconPackPackage(it) }
+        return localIconPacks.value[id]
     }
 
     private suspend fun calcSize(dir: File): Long {
@@ -92,91 +71,9 @@ class IconPackManager(private val context: Application) : CoroutineScope by Coro
 
         return runCatching {
             json.decodeFromString<PackageCache>(cacheFile.readText())
+        }.getOrElse {
+            PackageCache()
         }
-            .getOrElse {
-                PackageCache()
-            }
-    }
-
-    private fun writeCache(dir: File, cache: PackageCache) {
-        val cacheFile = dir.resolve("cache.json")
-        cacheFile.writeText(json.encodeToString(cache))
-    }
-
-    suspend fun invalidateSize(pkg: IconPackPackage) {
-        if (pkg is StoreIconPack) return
-
-        withContext(Dispatchers.IO) {
-            val dir = iconPackDir.resolve(pkg.id)
-            val cache = resolveCache(dir)
-            val newSize = calcSize(dir)
-            writeCache(dir, cache.copy(size = newSize))
-
-            withContext(Dispatchers.Main) {
-                localIconPacks.value[pkg.id]?.size = newSize
-            }
-        }
-    }
-
-    suspend fun installIconPack(xedFile: File) =
-        withContext(Dispatchers.IO) {
-            val tempDir = File(context.cacheDir, "icon_temp_${System.currentTimeMillis()}")
-            tempDir.mkdirs()
-
-            try {
-                XedPackage.extract(xedFile, tempDir)
-                installIconPackFromDir(tempDir)
-            } finally {
-                tempDir.deleteRecursively()
-            }
-        }
-
-    private suspend fun installIconPackFromDir(dir: File) {
-        val iconPackManifest = validateIconPack(dir) ?: return
-
-        val packageName = application!!.packageName
-        val packageManager = application!!.packageManager
-        val currentVersionCode = PackageInfoCompat.getLongVersionCode(packageManager.getPackageInfo(packageName, 0))
-        if (iconPackManifest.minAppVersion != null && iconPackManifest.minAppVersion.toLong() > currentVersionCode) {
-            dialogRes(
-                activity = SettingsActivity.instance,
-                title = strings.warning.getString(),
-                msg = strings.incompatible_icon_pack_warning.getString(),
-                cancelRes = strings.cancel,
-                okRes = strings.continue_action,
-                onOk = {
-                    DefaultScope.launch {
-                        writeIconPackToDisk(iconPackManifest, dir)
-                    }
-                },
-            )
-            return
-        }
-
-        writeIconPackToDisk(iconPackManifest, dir)
-    }
-
-    private suspend fun writeIconPackToDisk(iconPackManifest: IconPackManifest, dir: File) {
-        val installDir = iconPackDir.child(iconPackManifest.id)
-
-        var oldCreatedAt: Long? = null
-        if (installDir.exists()) {
-            oldCreatedAt = resolveCache(installDir).createdAt
-            uninstallIconPack(iconPackManifest.id)
-        }
-
-        dir.copyRecursively(installDir, overwrite = true)
-
-        val size = calcSize(installDir)
-        val newCache =
-            PackageCache(
-                createdAt = oldCreatedAt ?: System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-                size = size,
-            )
-        writeCache(installDir, newCache)
-
-        indexLocalPacks()
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -189,31 +86,29 @@ class IconPackManager(private val context: Application) : CoroutineScope by Coro
                 strings.manifest_missing.getString(),
                 cancelable = false,
             )
-
             return null
         }
         val iconPackManifest = runCatching {
             json.decodeFromString<IconPackManifest>(iconPackJson.readText())
-        }
-            .getOrElse { e ->
-                if (e is MissingFieldException) {
-                    val fields = e.missingFields.joinToString("\n") { "• $it" }
-                    dialogRes(
-                        SettingsActivity.instance,
-                        strings.icon_pack_install_failed.getString(),
-                        strings.manifest_missing_fields.getFilledString(fields),
-                        cancelable = false,
-                    )
-                    return null
-                }
+        }.getOrElse { e ->
+            if (e is MissingFieldException) {
+                val fields = e.missingFields.joinToString("\n") { "• $it" }
                 dialogRes(
                     SettingsActivity.instance,
                     strings.icon_pack_install_failed.getString(),
-                    e.localizedMessage ?: strings.unknown_err.getString(),
+                    strings.manifest_missing_fields.getFilledString(fields),
                     cancelable = false,
                 )
                 return null
             }
+            dialogRes(
+                SettingsActivity.instance,
+                strings.icon_pack_install_failed.getString(),
+                e.localizedMessage ?: strings.unknown_err.getString(),
+                cancelable = false,
+            )
+            return null
+        }
 
         return iconPackManifest
     }
@@ -223,15 +118,6 @@ class IconPackManager(private val context: Application) : CoroutineScope by Coro
         File(iconPack.installPath).deleteRecursively()
         _localIconPacks.update { it - iconPackId }
     }
-
-    suspend fun indexStoreIconPacks() =
-        withContext(Dispatchers.IO) {
-            val packsList = runCatching { StoreManager.fetchIconPacks() }.getOrNull() ?: return@withContext
-            val newPacks = packsList.associateBy({ it.id }, { StoreIconPack(it) })
-            withContext(Dispatchers.Main) {
-                _storeIconPacks.value = newPacks
-            }
-        }
 
     suspend fun indexLocalPacks() = mutex.withLock {
         val newLocal = mutableMapOf<String, LocalIconPack>()
@@ -254,10 +140,9 @@ class IconPackManager(private val context: Application) : CoroutineScope by Coro
                                     initSize = size,
                                 )
                             newLocal[iconPackManifest.id] = iconPack
+                        }.onFailure {
+                            logError(it, "Failed to index local icon pack")
                         }
-                            .onFailure {
-                                logError(it, "Failed to index local icon pack")
-                            }
                     }
                 }
             }
@@ -268,6 +153,12 @@ class IconPackManager(private val context: Application) : CoroutineScope by Coro
 
         if (Settings.icon_pack.isNotEmpty()) {
             currentIconPack.value = localIconPacks.value[Settings.icon_pack]
+        }
+    }
+
+    private fun writeCache(dir: File, cache: PackageCache) {
+        runCatching {
+            dir.resolve("cache.json").writeText(json.encodeToString(PackageCache.serializer(), cache))
         }
     }
 }

@@ -94,13 +94,6 @@ fun FormatterSettings(navController: NavController, modifier: Modifier = Modifie
         label = stringResource(strings.manage_formatters),
         backArrowVisible = true,
         isExpandedScreen = LocalIsExpandedScreen.current,
-        fab = {
-            ExtendedFloatingActionButton(
-                onClick = { navController.navigate("${SettingsRoutes.Extensions.route}?query=formatter") },
-                icon = { Icon(painter = painterResource(drawables.extension), contentDescription = null) },
-                text = { Text(stringResource(strings.browse_extensions)) },
-            )
-        },
     ) { paddingValues ->
         ReorderContainer(state = reorderState, modifier = modifier) {
             NestedScrollStretch {

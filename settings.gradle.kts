@@ -40,7 +40,7 @@ if (!soraX.exists() || soraX.listFiles()?.isEmpty() != false) {
 
 include(":app", ":core:main", ":core:components", ":core:resources")
 
-include(":features:extensions", ":features:runner", ":features:git")
+include(":features:runner")
 
 include(":editor", ":oniguruma-native", ":editor-lsp", ":language-textmate")
 

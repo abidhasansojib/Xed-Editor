@@ -12,7 +12,6 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.rk.activities.settings.SettingsActivity
 import com.rk.common.XedPackage
-import com.rk.extension.manager.StoreManager
 import com.rk.extension.model.PackageCache
 import com.rk.file.FileOperations
 import com.rk.file.FileWrapper
@@ -66,26 +65,11 @@ class ThemeManager(private val context: Application) : CoroutineScope by Corouti
     val loadedThemes: StateFlow<List<ThemeHolder>> = _loadedThemes.asStateFlow()
     private val _localThemes = MutableStateFlow<Map<String, LocalTheme>>(emptyMap())
     val localThemes: StateFlow<Map<String, LocalTheme>> = _localThemes.asStateFlow()
-    private val _storeThemes = MutableStateFlow<Map<String, StoreTheme>>(emptyMap())
-    val storeThemes: StateFlow<Map<String, StoreTheme>> = _storeThemes.asStateFlow()
 
     fun isInstalled(id: String) = localThemes.value.containsKey(id)
 
     fun getTheme(id: String): ThemePackage? {
-        val local = localThemes.value[id]
-        val store = storeThemes.value[id]
-
-        return when {
-            (local != null && store != null) -> UpdatableTheme(local, store)
-            local != null -> local
-            store != null -> store
-            else -> null
-        }
-    }
-
-    fun getSyncedThemes(): List<ThemePackage> {
-        val allIds = localThemes.value.keys + storeThemes.value.keys
-        return allIds.mapNotNull { getTheme(it) }
+        return localThemes.value[id]
     }
 
     fun uninstallTheme(theme: ThemeHolder) {
@@ -125,7 +109,6 @@ class ThemeManager(private val context: Application) : CoroutineScope by Corouti
     }
 
     suspend fun invalidateSize(pkg: ThemePackage) {
-        if (pkg is StoreTheme) return
 
         withContext(Dispatchers.IO) {
             val dir = themeDir().resolve(pkg.id)
@@ -260,15 +243,6 @@ class ThemeManager(private val context: Application) : CoroutineScope by Corouti
             )
         writeCache(installDir, newCache)
     }
-
-    suspend fun indexStoreThemes() =
-        withContext(Dispatchers.IO) {
-            val themesList = runCatching { StoreManager.fetchThemes() }.getOrNull() ?: return@withContext
-            val newThemes = themesList.associateBy({ it.id }, { StoreTheme(it) })
-            withContext(Dispatchers.Main) {
-                _storeThemes.value = newThemes
-            }
-        }
 
     suspend fun indexLocalThemes() = mutex.withLock {
         withContext(Dispatchers.IO) {

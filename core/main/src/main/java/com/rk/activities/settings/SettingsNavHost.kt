@@ -10,7 +10,6 @@ import com.rk.animations.NavigationAnimationTransitions
 import com.rk.lsp.LspRegistry
 import com.rk.settings.SettingsRegistry
 import com.rk.settings.SettingsScreen
-import com.rk.settings.about.AboutScreen
 import com.rk.settings.app.SettingsAppScreen
 import com.rk.settings.debugOptions.AppLogs
 import com.rk.settings.debugOptions.DeveloperOptions
@@ -29,7 +28,6 @@ import com.rk.settings.lsp.LspInitializationOptions
 import com.rk.settings.lsp.LspServerDetail
 import com.rk.settings.lsp.LspServerLogs
 import com.rk.settings.lsp.LspSettings
-import com.rk.settings.support.Support
 import com.rk.settings.theme.ThemeScreen
 
 @Composable
@@ -47,7 +45,6 @@ fun SettingsNavHost(navController: NavHostController, activity: SettingsActivity
         composable(SettingsRoutes.EditorSettings.route) { SettingsEditorScreen(navController) }
         composable(SettingsRoutes.Keybindings.route) { KeybindingsScreen() }
 
-        composable(SettingsRoutes.About.route) { AboutScreen() }
         composable(SettingsRoutes.EditorFontScreen.route) { EditorFontScreen() }
         composable(SettingsRoutes.AppFontScreen.route) { AppFontScreen() }
 
@@ -64,7 +61,6 @@ fun SettingsNavHost(navController: NavHostController, activity: SettingsActivity
         }
         composable(SettingsRoutes.DeveloperOptions.route) { DeveloperOptions(navController = navController) }
         composable(SettingsRoutes.AppLogs.route) { AppLogs() }
-        composable(SettingsRoutes.Support.route) { Support() }
         composable(SettingsRoutes.LanguageScreen.route) { LanguageScreen() }
         composable(SettingsRoutes.Formatters.route) { FormatterSettings(navController) }
         composable(SettingsRoutes.LspSettings.route) { LspSettings(navController) }
