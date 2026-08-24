@@ -1,216 +1,240 @@
 package com.rk.tabs.markdown
 
 import androidx.compose.ui.text.style.TextAlign
+import org.commonmark.ext.autolink.AutolinkExtension
+import org.commonmark.ext.gfm.strikethrough.Strikethrough
+import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
+import org.commonmark.ext.gfm.tables.TableBlock
+import org.commonmark.ext.gfm.tables.TableBody
+import org.commonmark.ext.gfm.tables.TableCell
+import org.commonmark.ext.gfm.tables.TableHead
+import org.commonmark.ext.gfm.tables.TableRow
+import org.commonmark.ext.gfm.tables.TablesExtension
+import org.commonmark.ext.task.list.items.TaskListItemsExtension
+import org.commonmark.node.BlockQuote
+import org.commonmark.node.BulletList
+import org.commonmark.node.Code
+import org.commonmark.node.CustomBlock
+import org.commonmark.node.CustomNode
+import org.commonmark.node.Emphasis
+import org.commonmark.node.FencedCodeBlock
+import org.commonmark.node.HardLineBreak
+import org.commonmark.node.Heading
+import org.commonmark.node.HtmlBlock
+import org.commonmark.node.HtmlInline
+import org.commonmark.node.Image
+import org.commonmark.node.IndentedCodeBlock
+import org.commonmark.node.Link
+import org.commonmark.node.ListItem
+import org.commonmark.node.Node
+import org.commonmark.node.OrderedList
+import org.commonmark.node.Paragraph
+import org.commonmark.node.SoftLineBreak
+import org.commonmark.node.StrongEmphasis
+import org.commonmark.node.Text
+import org.commonmark.node.ThematicBreak
+import org.commonmark.parser.Parser
 
 /**
- * Robust GFM Markdown parser converting raw text into a hierarchy of [MarkdownBlock]s.
+ * Standard AST-based GFM Markdown parser powered by [org.commonmark].
+ * Compiles Markdown syntax trees into structured [MarkdownBlock]s.
  */
 object MarkdownBlockParser {
 
+    private val EXTENSIONS =
+        listOf(
+            TablesExtension.create(),
+            TaskListItemsExtension.create(),
+            StrikethroughExtension.create(),
+            AutolinkExtension.create(),
+        )
+
+    private val PARSER = Parser.builder().extensions(EXTENSIONS).build()
+
     fun parse(markdown: String): List<MarkdownBlock> {
-        val lines = markdown.replace("\r\n", "\n").replace("\r", "\n").lines()
+        val document = PARSER.parse(markdown)
         val blocks = mutableListOf<MarkdownBlock>()
-        var i = 0
+        var child: Node? = document.firstChild
 
-        while (i < lines.size) {
-            val line = lines[i]
-            val trimmed = line.trim()
-
-            // 1. Skip blank lines
-            if (trimmed.isEmpty()) {
-                i++
-                continue
-            }
-
-            // 2. Fenced Code Block
-            if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
-                val fence = if (trimmed.startsWith("```")) "```" else "~~~"
-                val lang = trimmed.removePrefix(fence).trim()
-                val codeLines = mutableListOf<String>()
-                i++
-                while (i < lines.size) {
-                    val codeLine = lines[i]
-                    if (codeLine.trim().startsWith(fence)) {
-                        i++
-                        break
-                    }
-                    codeLines.add(codeLine)
-                    i++
-                }
-                blocks.add(MarkdownBlock.CodeBlock(language = lang, code = codeLines.joinToString("\n")))
-                continue
-            }
-
-            // 3. GitHub-style Alert Callout or Standard Blockquote
-            if (trimmed.startsWith(">")) {
-                val quoteLines = mutableListOf<String>()
-                while (i < lines.size && lines[i].trim().startsWith(">")) {
-                    val rawQuote = lines[i].trim().removePrefix(">").trimStart()
-                    quoteLines.add(rawQuote)
-                    i++
-                }
-
-                val firstLine = quoteLines.firstOrNull() ?: ""
-                val alertMatch = Regex("^\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\]\\s*(.*)$", RegexOption.IGNORE_CASE).find(firstLine)
-
-                if (alertMatch != null) {
-                    val typeStr = alertMatch.groupValues[1]
-                    val alertType = AlertType.fromTag(typeStr) ?: AlertType.NOTE
-                    val inlineTitle = alertMatch.groupValues[2].trim()
-                    val title = if (inlineTitle.isNotEmpty()) inlineTitle else alertType.label
-
-                    val bodyText = quoteLines.drop(1).joinToString("\n")
-                    val subBlocks = if (bodyText.isNotBlank()) parse(bodyText) else emptyList()
-                    blocks.add(MarkdownBlock.Alert(type = alertType, title = title, content = subBlocks))
-                } else {
-                    val quoteText = quoteLines.joinToString("\n")
-                    blocks.add(MarkdownBlock.Blockquote(quoteText))
-                }
-                continue
-            }
-
-            // 4. ATX Headings (# to ######)
-            val headingMatch = Regex("^(#{1,6})\\s+(.+)$").find(trimmed)
-            if (headingMatch != null) {
-                val level = headingMatch.groupValues[1].length
-                val title = headingMatch.groupValues[2].trim()
-                blocks.add(MarkdownBlock.Heading(level, title))
-                i++
-                continue
-            }
-
-            // 5. Horizontal Rule
-            if (trimmed.matches(Regex("^(?:-{3,}|\\*{3,}|_{3,})$"))) {
-                blocks.add(MarkdownBlock.HorizontalRule)
-                i++
-                continue
-            }
-
-            // 6. GFM Table
-            if (trimmed.startsWith("|") && trimmed.endsWith("|") && i + 1 < lines.size && isTableDivider(lines[i + 1])) {
-                val headerRow = parseTableRow(trimmed)
-                val dividerRow = lines[i + 1].trim()
-                val alignments = parseTableAlignments(dividerRow)
-                val rows = mutableListOf<List<String>>()
-                i += 2
-
-                while (i < lines.size && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
-                    rows.add(parseTableRow(lines[i].trim()))
-                    i++
-                }
-
-                blocks.add(MarkdownBlock.Table(headers = headerRow, alignments = alignments, rows = rows))
-                continue
-            }
-
-            // 7. Task Item (- [ ] or - [x])
-            val taskMatch = Regex("^[-*+]\\s+\\[([ xX])\\]\\s+(.+)$").find(trimmed)
-            if (taskMatch != null) {
-                val isChecked = taskMatch.groupValues[1].equals("x", ignoreCase = true)
-                val text = taskMatch.groupValues[2].trim()
-                blocks.add(MarkdownBlock.TaskItem(isChecked, text))
-                i++
-                continue
-            }
-
-            // 8. Ordered List Item
-            val orderedMatch = Regex("^(\\d+)\\.\\s+(.+)$").find(trimmed)
-            if (orderedMatch != null) {
-                val index = orderedMatch.groupValues[1].toIntOrNull() ?: 1
-                val text = orderedMatch.groupValues[2].trim()
-                val indent = line.takeWhile { it == ' ' }.length / 2
-                blocks.add(MarkdownBlock.ListItem(ordered = true, index = index, text = text, depth = indent))
-                i++
-                continue
-            }
-
-            // 9. Unordered List Item
-            val unorderedMatch = Regex("^[-*+]\\s+(.+)$").find(trimmed)
-            if (unorderedMatch != null) {
-                val text = unorderedMatch.groupValues[1].trim()
-                val indent = line.takeWhile { it == ' ' }.length / 2
-                blocks.add(MarkdownBlock.ListItem(ordered = false, index = 0, text = text, depth = indent))
-                i++
-                continue
-            }
-
-            // 10. Standalone Image Block: ![alt](url)
-            val imgMatch = Regex("^!\\[(.*?)\\]\\((.*?)\\)$").find(trimmed)
-            if (imgMatch != null) {
-                val alt = imgMatch.groupValues[1]
-                val url = imgMatch.groupValues[2]
-                blocks.add(MarkdownBlock.Image(alt, url))
-                i++
-                continue
-            }
-
-            // 11. Setext Headings (underlined with === or ---)
-            if (i + 1 < lines.size) {
-                val nextLine = lines[i + 1].trim()
-                if (nextLine.matches(Regex("^={2,}$"))) {
-                    blocks.add(MarkdownBlock.Heading(level = 1, text = trimmed))
-                    i += 2
-                    continue
-                } else if (nextLine.matches(Regex("^-{2,}$"))) {
-                    blocks.add(MarkdownBlock.Heading(level = 2, text = trimmed))
-                    i += 2
-                    continue
-                }
-            }
-
-            // 12. Regular Paragraph
-            val paragraphLines = mutableListOf<String>()
-            while (i < lines.size) {
-                val curr = lines[i].trim()
-                if (curr.isEmpty() ||
-                    curr.startsWith("#") ||
-                    curr.startsWith(">") ||
-                    curr.startsWith("```") ||
-                    curr.startsWith("~~~") ||
-                    (curr.startsWith("|") && curr.endsWith("|")) ||
-                    curr.matches(Regex("^(?:-{3,}|\\*{3,}|_{3,})$")) ||
-                    Regex("^[-*+]\\s+").containsMatchIn(curr) ||
-                    Regex("^\\d+\\.\\s+").containsMatchIn(curr) ||
-                    Regex("^!\\[(.*?)\\]\\((.*?)\\)$").matches(curr)
-                ) {
-                    break
-                }
-                paragraphLines.add(lines[i])
-                i++
-            }
-
-            if (paragraphLines.isNotEmpty()) {
-                blocks.add(MarkdownBlock.Paragraph(paragraphLines.joinToString("\n")))
-            }
+        while (child != null) {
+            parseNodeInto(child, blocks)
+            child = child.next
         }
 
         return blocks
     }
 
-    private fun isTableDivider(line: String): Boolean {
-        val trimmed = line.trim()
-        if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return false
-        val cells = trimmed.split("|").map { it.trim() }.filter { it.isNotEmpty() }
-        return cells.isNotEmpty() && cells.all { it.matches(Regex("^:?-+:?$")) }
-    }
-
-    private fun parseTableRow(line: String): List<String> {
-        return line.trim()
-            .removePrefix("|")
-            .removeSuffix("|")
-            .split("|")
-            .map { it.trim() }
-    }
-
-    private fun parseTableAlignments(dividerLine: String): List<TextAlign> {
-        return parseTableRow(dividerLine).map { cell ->
-            val left = cell.startsWith(":")
-            val right = cell.endsWith(":")
-            when {
-                left && right -> TextAlign.Center
-                right -> TextAlign.Right
-                else -> TextAlign.Left
+    private fun parseNodeInto(node: Node, blocks: MutableList<MarkdownBlock>) {
+        when (node) {
+            is Heading -> {
+                blocks.add(MarkdownBlock.Heading(level = node.level, text = renderInlineText(node)))
             }
+
+            is FencedCodeBlock -> {
+                blocks.add(MarkdownBlock.CodeBlock(language = node.info ?: "", code = (node.literal ?: "").trimEnd()))
+            }
+
+            is IndentedCodeBlock -> {
+                blocks.add(MarkdownBlock.CodeBlock(language = "", code = (node.literal ?: "").trimEnd()))
+            }
+
+            is BlockQuote -> {
+                blocks.add(parseBlockQuote(node))
+            }
+
+            is TableBlock -> {
+                blocks.add(parseTable(node))
+            }
+
+            is BulletList -> {
+                var item: Node? = node.firstChild
+                while (item != null) {
+                    if (item is ListItem) {
+                        val text = renderInlineText(item).trim()
+                        val taskMatch = Regex("^\\[([ xX])\\]\\s*(.*)$").find(text)
+                        if (taskMatch != null) {
+                            val isChecked = taskMatch.groupValues[1].equals("x", ignoreCase = true)
+                            val content = taskMatch.groupValues[2]
+                            blocks.add(MarkdownBlock.TaskItem(isChecked = isChecked, text = content))
+                        } else {
+                            blocks.add(MarkdownBlock.ListItem(ordered = false, index = 0, text = text, depth = 0))
+                        }
+                    }
+                    item = item.next
+                }
+            }
+
+            is OrderedList -> {
+                var item: Node? = node.firstChild
+                var idx = node.startNumber
+                while (item != null) {
+                    if (item is ListItem) {
+                        val text = renderInlineText(item).trim()
+                        blocks.add(MarkdownBlock.ListItem(ordered = true, index = idx, text = text, depth = 0))
+                        idx++
+                    }
+                    item = item.next
+                }
+            }
+
+            is ThematicBreak -> {
+                blocks.add(MarkdownBlock.HorizontalRule)
+            }
+
+            is Paragraph -> {
+                val first = node.firstChild
+                if (first is Image && first.next == null) {
+                    val alt = renderInlineText(first)
+                    blocks.add(MarkdownBlock.Image(alt = alt, url = first.destination ?: ""))
+                } else {
+                    blocks.add(MarkdownBlock.Paragraph(text = renderInlineText(node)))
+                }
+            }
+
+            is HtmlBlock -> {
+                blocks.add(MarkdownBlock.Paragraph(text = node.literal ?: ""))
+            }
+
+            else -> {}
         }
+    }
+
+    private fun parseBlockQuote(node: BlockQuote): MarkdownBlock {
+        val rawText = renderInlineText(node).trim()
+        val alertMatch =
+            Regex("^\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\]\\s*([\\s\\S]*)$", RegexOption.IGNORE_CASE)
+                .find(rawText)
+
+        if (alertMatch != null) {
+            val typeStr = alertMatch.groupValues[1]
+            val alertType = AlertType.fromTag(typeStr) ?: AlertType.NOTE
+            val body = alertMatch.groupValues[2].trim()
+            val subBlocks = if (body.isNotEmpty()) parse(body) else emptyList()
+            return MarkdownBlock.Alert(type = alertType, title = alertType.label, content = subBlocks)
+        }
+
+        return MarkdownBlock.Blockquote(text = rawText)
+    }
+
+    private fun parseTable(tableBlock: TableBlock): MarkdownBlock {
+        val headers = mutableListOf<String>()
+        val alignments = mutableListOf<TextAlign>()
+        val rows = mutableListOf<List<String>>()
+
+        var section: Node? = tableBlock.firstChild
+        while (section != null) {
+            when (section) {
+                is TableHead -> {
+                    var row: Node? = section.firstChild
+                    while (row != null) {
+                        if (row is TableRow) {
+                            var cell: Node? = row.firstChild
+                            while (cell != null) {
+                                if (cell is TableCell) {
+                                    headers.add(renderInlineText(cell))
+                                    alignments.add(
+                                        when (cell.alignment) {
+                                            TableCell.Alignment.LEFT -> TextAlign.Left
+                                            TableCell.Alignment.CENTER -> TextAlign.Center
+                                            TableCell.Alignment.RIGHT -> TextAlign.Right
+                                            else -> TextAlign.Left
+                                        },
+                                    )
+                                }
+                                cell = cell.next
+                            }
+                        }
+                        row = row.next
+                    }
+                }
+
+                is TableBody -> {
+                    var row: Node? = section.firstChild
+                    while (row != null) {
+                        if (row is TableRow) {
+                            val rowCells = mutableListOf<String>()
+                            var cell: Node? = row.firstChild
+                            while (cell != null) {
+                                if (cell is TableCell) {
+                                    rowCells.add(renderInlineText(cell))
+                                }
+                                cell = cell.next
+                            }
+                            rows.add(rowCells)
+                        }
+                        row = row.next
+                    }
+                }
+            }
+            section = section.next
+        }
+
+        return MarkdownBlock.Table(headers = headers, alignments = alignments, rows = rows)
+    }
+
+    fun renderInlineText(node: Node): String {
+        val sb = StringBuilder()
+        var child = node.firstChild
+
+        while (child != null) {
+            when (child) {
+                is Text -> sb.append(child.literal)
+                is Code -> sb.append("`").append(child.literal).append("`")
+                is Emphasis -> sb.append("*").append(renderInlineText(child)).append("*")
+                is StrongEmphasis -> sb.append("**").append(renderInlineText(child)).append("**")
+                is Strikethrough -> sb.append("~~").append(renderInlineText(child)).append("~~")
+                is Link -> sb.append("[").append(renderInlineText(child)).append("](").append(child.destination ?: "").append(")")
+                is Image -> sb.append("![").append(renderInlineText(child)).append("](").append(child.destination ?: "").append(")")
+                is SoftLineBreak -> sb.append(" ")
+                is HardLineBreak -> sb.append("\n")
+                is HtmlInline -> sb.append(child.literal)
+                is CustomNode -> sb.append(renderInlineText(child))
+                is CustomBlock -> sb.append(renderInlineText(child))
+                else -> sb.append(renderInlineText(child))
+            }
+            child = child.next
+        }
+
+        return sb.toString()
     }
 }

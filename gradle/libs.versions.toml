@@ -68,6 +68,7 @@ gson = "2.13.2"
 semver = "3.1.0"
 leakcanary = "2.14"
 motionCompose = "2.0.1"
+commonmark = "0.24.0"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -192,3 +193,10 @@ regex-re2j = { module = "io.github.dingyi222666.regex-lib:regex-lib-re2j", versi
 
 # Desugaring
 desugar = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar_jdk_libs" }
+
+# CommonMark
+commonmark-core = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
+commonmark-ext-gfm-tables = { module = "org.commonmark:commonmark-ext-gfm-tables", version.ref = "commonmark" }
+commonmark-ext-task-list-items = { module = "org.commonmark:commonmark-ext-task-list-items", version.ref = "commonmark" }
+commonmark-ext-gfm-strikethrough = { module = "org.commonmark:commonmark-ext-gfm-strikethrough", version.ref = "commonmark" }
+commonmark-ext-autolink = { module = "org.commonmark:commonmark-ext-autolink", version.ref = "commonmark" }
