@@ -829,17 +829,4 @@
     <string name="ssh_connection_success">SSH connection successful!</string>
     <string name="ssh_connection_failed">SSH connection failed: %s</string>
     <string name="ssh_missing_config">Please configure SSH Host and Username in Settings -> Terminal</string>
-    <string name="add_session">Add session</string>
-    <string name="sessions">Sessions</string>
-    <string name="session_name_exists">A session with this name already exists</string>
-    <string name="block">Block</string>
-    <string name="bar">Bar</string>
-    <string name="underline">Underline</string>
-    <string name="cursor_style">Cursor style</string>
-    <string name="cursor_style_desc">Change terminal cursor shape</string>
-    <string name="change_extra_keys">Change extra keys</string>
-    <string name="change_extra_keys_desc">Change extra keys panel</string>
-    <string name="clipboard_keybindings">Clipboard keybindings</string>
-    <string name="clipboard_keybindings_desc">Enable standard clipboard shortcuts (Ctrl+V, Ctrl+C)</string>
-    <string name="scrollback_buffer">Scrollback buffer</string>
 </resources>
