@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
     paths-ignore:
       - "**/*.md"
   workflow_dispatch:
@@ -52,9 +54,20 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Set Commit Hash
-        id: commit_hash
-        run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Set Release Info
+        id: release_info
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts || echo "3.4.4")
+          echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "RELEASE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+            echo "RELEASE_NAME=Xed-Editor ${{ github.ref_name }}" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TAG=v${VERSION_NAME}-${COMMIT_HASH}" >> $GITHUB_ENV
+            echo "RELEASE_NAME=Xed-Editor v${VERSION_NAME} (${COMMIT_HASH})" >> $GITHUB_ENV
+          fi
 
       - name: Clone submodules
         run: git submodule update --init --recursive
@@ -87,10 +100,11 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: "app/xed-editor-${{ env.COMMIT_HASH }}.apk"
-          tag: "latest"
-          name: "Xed-Editor Latest (${{ env.COMMIT_HASH }})"
+          tag: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
           body: |
             ### Automated Build Release
+            - **Version**: ${{ env.VERSION_NAME }}
             - **Commit**: [${{ env.COMMIT_HASH }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
             - **Commit Message**: ${{ github.event.head_commit.message }}
           allowUpdates: true
