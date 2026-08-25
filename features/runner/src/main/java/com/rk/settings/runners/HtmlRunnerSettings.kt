@@ -34,13 +34,6 @@ fun HtmlRunnerSettings(modifier: Modifier = Modifier) {
             )
 
             SettingsItem(
-                label = stringResource(strings.inject_eruda),
-                description = stringResource(strings.inject_eruda_desc),
-                default = Settings.inject_eruda,
-                sideEffect = { Settings.inject_eruda = it },
-            )
-
-            SettingsItem(
                 label = stringResource(strings.server_port),
                 description = stringResource(strings.server_port_desc),
                 default = false,
