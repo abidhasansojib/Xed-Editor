@@ -154,14 +154,17 @@ private fun RenderBlock(
     imageLoader: ImageLoader,
 ) {
     when (block) {
+        is MarkdownBlock.Frontmatter -> RenderFrontmatter(block)
         is MarkdownBlock.Heading -> RenderHeading(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.Paragraph -> RenderParagraph(block.text, currentFile, projectRoot, viewModel)
         is MarkdownBlock.CodeBlock -> RenderCodeBlock(block)
         is MarkdownBlock.Alert -> RenderAlert(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
+        is MarkdownBlock.Details -> RenderDetails(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
         is MarkdownBlock.Table -> RenderTable(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.Blockquote -> RenderBlockquote(block.text, currentFile, projectRoot, viewModel)
         is MarkdownBlock.ListItem -> RenderListItem(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.TaskItem -> RenderTaskItem(block, currentFile, projectRoot, viewModel)
+        is MarkdownBlock.DefinitionList -> RenderDefinitionList(block, currentFile, projectRoot, viewModel)
         is MarkdownBlock.Image -> RenderImage(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
         is MarkdownBlock.MathBlock -> RenderMathBlock(block)
         is MarkdownBlock.Footnote -> {}
@@ -310,6 +313,62 @@ private fun RenderParagraph(
 private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
     var copied by remember { mutableStateOf(false) }
     var wrapCode by remember { mutableStateOf(false) }
+    val isDiff = codeBlock.language.equals("diff", ignoreCase = true) || codeBlock.language.equals("patch", ignoreCase = true)
+
+    val diffAnnotated =
+        remember(codeBlock.code, isDiff) {
+            if (isDiff) {
+                buildAnnotatedString {
+                    val lines = codeBlock.code.lines()
+                    lines.forEachIndexed { idx, line ->
+                        when {
+                            line.startsWith("+") && !line.startsWith("+++") -> {
+                                pushStyle(
+                                    SpanStyle(
+                                        color = Color(0xFF2E7D32),
+                                        background = Color(0xFF43A047).copy(alpha = 0.15f),
+                                    ),
+                                )
+                                append(line)
+                                pop()
+                            }
+                            line.startsWith("-") && !line.startsWith("---") -> {
+                                pushStyle(
+                                    SpanStyle(
+                                        color = Color(0xFFC62828),
+                                        background = Color(0xFFE53935).copy(alpha = 0.15f),
+                                    ),
+                                )
+                                append(line)
+                                pop()
+                            }
+                            line.startsWith("@@") -> {
+                                pushStyle(
+                                    SpanStyle(
+                                        color = Color(0xFF0288D1),
+                                        fontWeight = FontWeight.Bold,
+                                    ),
+                                )
+                                append(line)
+                                pop()
+                            }
+                            else -> {
+                                append(line)
+                            }
+                        }
+                        if (idx < lines.lastIndex) append("\n")
+                    }
+                }
+            } else null
+        }
+
+    val isMermaid = codeBlock.language.equals("mermaid", ignoreCase = true)
+    val displayTitle =
+        when {
+            isMermaid -> "DIAGRAM / MERMAID"
+            isDiff -> "DIFF / PATCH"
+            else -> codeBlock.language.ifBlank { "CODE" }.uppercase()
+        }
 
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
@@ -329,7 +388,7 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = codeBlock.language.ifBlank { "CODE" }.uppercase(),
+                    text = displayTitle,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -381,16 +440,177 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
                         .then(if (!wrapCode) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
                         .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text(
-                    text = codeBlock.code,
-                    style =
-                        MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp,
-                        ),
-                    color = MaterialTheme.colorScheme.onSurface,
+                if (diffAnnotated != null) {
+                    Text(
+                        text = diffAnnotated,
+                        style =
+                            MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp,
+                            ),
+                    )
+                } else {
+                    Text(
+                        text = codeBlock.code,
+                        style =
+                            MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp,
+                            ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenderFrontmatter(frontmatter: MarkdownBlock.Frontmatter) {
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Metadata",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "METADATA",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                    contentDescription = "Toggle metadata",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
                 )
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    frontmatter.data.forEach { (key, value) ->
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "$key: ",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = value,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenderDetails(
+    details: MarkdownBlock.Details,
+    currentFile: FileObject,
+    projectRoot: FileObject?,
+    viewModel: MainViewModel,
+    baseDirPath: String?,
+    imageLoader: ImageLoader,
+) {
+    var isExpanded by remember { mutableStateOf(details.isOpen) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                    contentDescription = "Toggle details",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = details.summary,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    details.content.forEach { subBlock ->
+                        RenderBlock(
+                            block = subBlock,
+                            currentFile = currentFile,
+                            projectRoot = projectRoot,
+                            viewModel = viewModel,
+                            baseDirPath = baseDirPath,
+                            imageLoader = imageLoader,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenderDefinitionList(
+    defList: MarkdownBlock.DefinitionList,
+    currentFile: FileObject,
+    projectRoot: FileObject?,
+    viewModel: MainViewModel,
+) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        defList.items.forEach { item ->
+            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                Text(
+                    text = item.term,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                item.definitions.forEach { def ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 2.dp)) {
+                        RenderParagraph(def, currentFile, projectRoot, viewModel)
+                    }
+                }
             }
         }
     }
@@ -398,6 +618,16 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
 
 @Composable
 private fun RenderMathBlock(mathBlock: MarkdownBlock.MathBlock) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val mathAnnotated =
+        remember(mathBlock.expression, primaryColor) {
+            LaTeXParser.parse(
+                expression = mathBlock.expression,
+                primaryColor = primaryColor,
+                isBlock = true,
+            )
+        }
+
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
@@ -415,11 +645,10 @@ private fun RenderMathBlock(mathBlock: MarkdownBlock.MathBlock) {
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = mathBlock.expression,
+                text = mathAnnotated,
                 style =
                     MaterialTheme.typography.bodyLarge.copy(
                         fontFamily = FontFamily.Monospace,
-                        fontStyle = FontStyle.Italic,
                         fontSize = 15.sp,
                         textAlign = TextAlign.Center,
                     ),

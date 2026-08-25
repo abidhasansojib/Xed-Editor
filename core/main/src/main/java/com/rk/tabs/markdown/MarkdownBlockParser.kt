@@ -55,8 +55,22 @@ object MarkdownBlockParser {
         Pattern.compile("<img\\s+[^>]*src=[\"']([^\"']+)[\"'][^>]*?(?:alt=[\"']([^\"']*)[\"'])?[^>]*>", Pattern.CASE_INSENSITIVE)
 
     fun parse(markdown: String): List<MarkdownBlock> {
-        val document = PARSER.parse(markdown)
+        var rawText = markdown
         val blocks = mutableListOf<MarkdownBlock>()
+
+        // Strip Obsidian comments %% ... %%
+        rawText = rawText.replace(Regex("%%[\\s\\S]*?%%"), "")
+
+        // Check for YAML Frontmatter at the start of document: --- ... ---
+        val frontmatterMatch = Regex("^---\\r?\\n([\\s\\S]*?)\\r?\\n---\\r?\\n").find(rawText)
+        if (frontmatterMatch != null) {
+            val fmBody = frontmatterMatch.groupValues[1]
+            val data = parseYamlFrontmatter(fmBody)
+            blocks.add(MarkdownBlock.Frontmatter(data = data, raw = fmBody.trim()))
+            rawText = rawText.substring(frontmatterMatch.range.last + 1)
+        }
+
+        val document = PARSER.parse(rawText)
         var child: Node? = document.firstChild
 
         while (child != null) {
@@ -65,6 +79,22 @@ object MarkdownBlockParser {
         }
 
         return blocks
+    }
+
+    private fun parseYamlFrontmatter(yaml: String): Map<String, String> {
+        val map = mutableMapOf<String, String>()
+        yaml.lines().forEach { line ->
+            val trimmed = line.trim()
+            if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
+                val colonIdx = trimmed.indexOf(':')
+                if (colonIdx != -1) {
+                    val key = trimmed.substring(0, colonIdx).trim()
+                    val value = trimmed.substring(colonIdx + 1).trim().trim('"', '\'')
+                    map[key] = value
+                }
+            }
+        }
+        return map
     }
 
     private fun parseNodeInto(node: Node, blocks: MutableList<MarkdownBlock>) {
@@ -78,7 +108,7 @@ object MarkdownBlockParser {
             is FencedCodeBlock -> {
                 val lang = (node.info ?: "").trim()
                 val code = (node.literal ?: "").trimEnd()
-                if (lang.equals("math", ignoreCase = true)) {
+                if (lang.equals("math", ignoreCase = true) || lang.equals("latex", ignoreCase = true) || lang.equals("tex", ignoreCase = true)) {
                     blocks.add(MarkdownBlock.MathBlock(expression = code))
                 } else {
                     blocks.add(MarkdownBlock.CodeBlock(language = lang, code = code))
@@ -113,10 +143,20 @@ object MarkdownBlockParser {
                 val raw = renderInlineText(node).trim()
 
                 // Check for block math: $$...$$
-                val mathMatch = Regex("^\\$\\$([\\s\\S]*)\\$\\$$").find(raw)
-                if (mathMatch != null) {
+                val mathMatch = Regex("^\\$\\$([\\s\\S]*?)\\$\\$$").find(raw)
+                if (mathMatch != null && !mathMatch.groupValues[1].contains("$$")) {
                     blocks.add(MarkdownBlock.MathBlock(expression = mathMatch.groupValues[1].trim()))
                     return
+                }
+
+                // Check for Definition List: Term\n: Definition
+                val lines = raw.lines()
+                if (lines.size >= 2 && lines.drop(1).any { it.trimStart().startsWith(":") }) {
+                    val defItems = parseDefinitionList(raw)
+                    if (defItems.isNotEmpty()) {
+                        blocks.add(MarkdownBlock.DefinitionList(items = defItems))
+                        return
+                    }
                 }
 
                 // Check for Obsidian image embed: ![[image.png]] or ![[image.png|alt]]
@@ -153,6 +193,27 @@ object MarkdownBlockParser {
             is HtmlBlock -> {
                 val raw = (node.literal ?: "").trim()
 
+                // Check for <details> ... </details>
+                val detailsMatch =
+                    Regex("<details(?:\\s+open)?>([\\s\\S]*?)</details>", RegexOption.IGNORE_CASE).find(raw)
+                if (detailsMatch != null) {
+                    val isOpen = raw.contains("open", ignoreCase = true)
+                    val inner = detailsMatch.groupValues[1].trim()
+
+                    val summaryMatch = Regex("<summary>([\\s\\S]*?)</summary>", RegexOption.IGNORE_CASE).find(inner)
+                    val summary = summaryMatch?.groupValues?.get(1)?.trim() ?: "Details"
+                    val contentBody =
+                        if (summaryMatch != null) {
+                            inner.substring(0, summaryMatch.range.first) + inner.substring(summaryMatch.range.last + 1)
+                        } else {
+                            inner
+                        }.trim()
+
+                    val subBlocks = if (contentBody.isNotEmpty()) parse(contentBody) else emptyList()
+                    blocks.add(MarkdownBlock.Details(summary = summary, isOpen = isOpen, content = subBlocks))
+                    return
+                }
+
                 // Check for embedded <img> tags inside HTML blocks (e.g. <div align="center"><img src="..."></div>)
                 val imgMatcher = HTML_IMG_PATTERN.matcher(raw)
                 if (imgMatcher.find()) {
@@ -177,6 +238,33 @@ object MarkdownBlockParser {
 
             else -> {}
         }
+    }
+
+    private fun parseDefinitionList(raw: String): List<DefinitionItem> {
+        val items = mutableListOf<DefinitionItem>()
+        val lines = raw.lines()
+        var currentTerm: String? = null
+        val currentDefs = mutableListOf<String>()
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith(":")) {
+                val def = trimmed.removePrefix(":").trim()
+                if (def.isNotEmpty()) {
+                    currentDefs.add(def)
+                }
+            } else if (trimmed.isNotEmpty()) {
+                if (currentTerm != null && currentDefs.isNotEmpty()) {
+                    items.add(DefinitionItem(currentTerm, currentDefs.toList()))
+                    currentDefs.clear()
+                }
+                currentTerm = trimmed
+            }
+        }
+        if (currentTerm != null && currentDefs.isNotEmpty()) {
+            items.add(DefinitionItem(currentTerm, currentDefs.toList()))
+        }
+        return items
     }
 
     private fun parseBulletList(list: BulletList, blocks: MutableList<MarkdownBlock>, depth: Int) {

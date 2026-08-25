@@ -66,10 +66,13 @@ enum class AlertType(val label: String, val defaultTitle: String) {
     }
 }
 
+data class DefinitionItem(val term: String, val definitions: List<String>)
+
 /**
  * Structured Markdown AST blocks supporting Obsidian & GitHub Flavored Markdown.
  */
 sealed interface MarkdownBlock {
+    data class Frontmatter(val data: Map<String, String>, val raw: String) : MarkdownBlock
     data class Heading(val level: Int, val text: String, val id: String = "") : MarkdownBlock
     data class Paragraph(val text: String) : MarkdownBlock
     data class CodeBlock(val language: String, val code: String) : MarkdownBlock
@@ -81,6 +84,11 @@ sealed interface MarkdownBlock {
         val defaultFolded: Boolean = false,
         val content: List<MarkdownBlock>,
     ) : MarkdownBlock
+    data class Details(
+        val summary: String,
+        val isOpen: Boolean = false,
+        val content: List<MarkdownBlock>,
+    ) : MarkdownBlock
     data class Table(
         val headers: List<String>,
         val alignments: List<TextAlign>,
@@ -88,6 +96,7 @@ sealed interface MarkdownBlock {
     ) : MarkdownBlock
     data class ListItem(val ordered: Boolean, val index: Int, val text: String, val depth: Int = 0) : MarkdownBlock
     data class TaskItem(val isChecked: Boolean, val text: String, val depth: Int = 0) : MarkdownBlock
+    data class DefinitionList(val items: List<DefinitionItem>) : MarkdownBlock
     data class Image(val alt: String, val url: String) : MarkdownBlock
     data class MathBlock(val expression: String) : MarkdownBlock
     data class Footnote(val id: String, val text: String) : MarkdownBlock
