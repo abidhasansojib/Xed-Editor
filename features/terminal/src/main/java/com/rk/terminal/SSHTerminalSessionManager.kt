@@ -197,6 +197,8 @@ object SSHTerminalSessionManager {
         }
     }
 
+    fun terminateSession(sessionId: String) = removeSession(sessionId)
+
     fun terminateAll() {
         bridges.values.forEach { it.disconnect() }
         bridges.clear()
