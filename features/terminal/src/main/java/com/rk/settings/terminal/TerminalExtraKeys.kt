@@ -34,6 +34,7 @@ import com.rk.resources.strings
 import com.rk.settings.Preference
 import com.rk.settings.Settings
 import com.rk.tabs.editor.EditorNotice
+import com.rk.theme.GitColorScheme
 import com.rk.utils.isSystemInDarkTheme
 import com.rk.utils.openUrl
 import io.github.rosemoe.sora.event.ContentChangeEvent
@@ -138,11 +139,12 @@ fun TerminalExtraKeys() {
                             Settings.terminal_extra_keys = it.editor.text.toString()
                         }
 
+                        val gitColorScheme = GitColorScheme.create()
                         setThemeColors(
                             isDarkMode = isDarkMode,
                             selectionColors = selectionColors,
                             colorScheme = colorScheme,
-                            gitColorScheme = null,
+                            gitColorScheme = gitColorScheme,
                         )
 
                         scope.launch { configureLanguage(BuiltinFileType.JSON.textmateScope!!) }

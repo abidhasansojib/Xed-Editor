@@ -202,11 +202,11 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                 label = stringResource(strings.ssh_auth_type),
                 description = if (authType == "key") stringResource(strings.ssh_auth_key) else stringResource(strings.ssh_auth_password),
                 items = listOf(
-                    strings.ssh_auth_password.getString() to "password",
-                    strings.ssh_auth_key.getString() to "key",
+                    "password" to strings.ssh_auth_password.getString(),
+                    "key" to strings.ssh_auth_key.getString(),
                 ),
-                default = authType,
-                onSelect = {
+                selectedItem = authType,
+                onItemSelected = {
                     authType = it
                     Settings.ssh_auth_type = it
                 },
@@ -285,28 +285,28 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
             PreferenceList(
                 label = stringResource(strings.cursor_style),
                 description = stringResource(cursorStyle.stringRes),
-                items = TerminalCursorStyle.entries.map { stringResource(it.stringRes) to it },
-                default = cursorStyle,
-                onSelect = {
+                items = TerminalCursorStyle.entries.map { it to it.stringRes.getString() },
+                selectedItem = cursorStyle,
+                onItemSelected = {
                     cursorStyle = it
                     Settings.terminal_cursor_style = it.value
                 },
             )
 
             SteppedValueSlider(
-                label = stringResource(strings.font_size),
-                description = stringResource(strings.font_size_desc),
+                label = stringResource(strings.text_size),
+                description = stringResource(strings.text_size_desc),
                 min = 9,
                 max = 30,
                 default = Settings.terminal_font_size,
-                step = 1,
+                stepSize = 1,
             ) {
                 Settings.terminal_font_size = it
             }
 
             NextScreenCard(
                 label = stringResource(strings.manage_terminal_font),
-                description = stringResource(strings.font_desc),
+                description = stringResource(strings.manage_terminal_font),
                 navController = overrideNavController ?: settingsNavController.get(),
                 route = SettingsRoutes.TerminalFontScreen,
             )

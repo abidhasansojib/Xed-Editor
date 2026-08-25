@@ -12,9 +12,7 @@ import com.rk.terminal.TerminalBackEnd
 import com.rk.terminal.TerminalScreen
 import com.rk.terminal.ssh.SSHConfig
 import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
-import com.rk.terminal.virtualkeys.VirtualKeysListener
-import com.rk.terminal.virtualkeys.VirtualKeysView
-import com.rk.theme.KarbonTheme
+import com.rk.theme.XedTheme
 import com.termux.view.TerminalView
 import java.lang.ref.WeakReference
 
@@ -30,7 +28,7 @@ class Terminal : ComponentActivity() {
         val initialCommand = intent.getStringExtra("initial_command")
 
         setContent {
-            KarbonTheme {
+            XedTheme {
                 TerminalScreen(terminalActivity = this@Terminal, initialCommand = initialCommand)
             }
         }
