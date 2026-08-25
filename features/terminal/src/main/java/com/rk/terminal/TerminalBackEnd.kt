@@ -63,7 +63,11 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
     }
 
     override fun getTerminalCursorStyle(): Int {
-        return TerminalCursorStyle.fromString(Settings.terminal_cursor_style).style
+        return when (Settings.terminal_cursor_style) {
+            "underline" -> TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE
+            "bar" -> TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR
+            else -> TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK
+        }
     }
 
     override fun logError(tag: String?, message: String?) {
@@ -88,6 +92,10 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
 
     override fun logStackTrace(tag: String?, e: Exception?) {
         e?.printStackTrace()
+    }
+
+    override fun logStackTraceWithMessage(tag: String?, message: String?, e: Exception?) {
+        Log.e(tag ?: "Terminal", message ?: "", e)
     }
 
     override fun onScale(scale: Float): Float {
