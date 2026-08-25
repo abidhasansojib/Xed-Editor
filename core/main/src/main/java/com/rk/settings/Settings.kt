@@ -195,6 +195,7 @@ object Settings {
         CachedPreference("excluded_files_search", DEFAULT_EXCLUDED_FILES_SEARCH.joinToString("\n"))
     var excluded_files_drawer by
         CachedPreference("excluded_files_drawer", DEFAULT_EXCLUDED_FILES_DRAWER.joinToString("\n"))
+    var file_mask by CachedPreference("file_mask", "")
     var formatters by CachedPreference("formatters", "")
 
     // Terminal and SSH settings
