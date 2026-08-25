@@ -1,8 +1,10 @@
 package com.rk.terminal
 
+import android.content.Context
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.inputmethod.InputMethodManager
 import com.blankj.utilcode.util.ClipboardUtils
 import com.blankj.utilcode.util.KeyboardUtils
 import com.rk.activities.terminal.Terminal
@@ -49,43 +51,39 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
 
     override fun onColorsChanged(session: TerminalSession) {}
 
-    override fun onTerminalCursorStateChange(state: Boolean) {}
+    override fun onTerminalCursorStateChange(state: Boolean) {
+        val activity = Terminal.instance ?: return
+        activity.terminalView.get()?.setTerminalCursorBlinkerState(state, true)
+    }
 
     override fun setTerminalShellPid(session: TerminalSession, pid: Int) {}
 
-    override fun shouldSupportClipboardKeybindings(): Boolean = Settings.terminal_clipboard_keybindings
+    override fun shouldSupportClipboardKeybindings(): Boolean {
+        return Settings.terminal_clipboard_keybindings
+    }
 
     override fun getTerminalCursorStyle(): Int {
-        return when (Settings.terminal_cursor_style) {
-            "bar" -> TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR
-            "underline" -> TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE
-            else -> TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK
-        }
+        return TerminalCursorStyle.fromString(Settings.terminal_cursor_style).style
     }
 
     override fun logError(tag: String?, message: String?) {
-        Log.e(tag.toString(), message.toString())
+        Log.e(tag ?: "Terminal", message ?: "")
     }
 
     override fun logWarn(tag: String?, message: String?) {
-        Log.w(tag.toString(), message.toString())
+        Log.w(tag ?: "Terminal", message ?: "")
     }
 
     override fun logInfo(tag: String?, message: String?) {
-        Log.i(tag.toString(), message.toString())
+        Log.i(tag ?: "Terminal", message ?: "")
     }
 
     override fun logDebug(tag: String?, message: String?) {
-        Log.d(tag.toString(), message.toString())
+        Log.d(tag ?: "Terminal", message ?: "")
     }
 
     override fun logVerbose(tag: String?, message: String?) {
-        Log.v(tag.toString(), message.toString())
-    }
-
-    override fun logStackTraceWithMessage(tag: String?, message: String?, e: Exception?) {
-        Log.e(tag.toString(), message.toString())
-        e?.printStackTrace()
+        Log.v(tag ?: "Terminal", message ?: "")
     }
 
     override fun logStackTrace(tag: String?, e: Exception?) {
@@ -93,10 +91,23 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
     }
 
     override fun onScale(scale: Float): Float {
-        val fontScale = scale.coerceIn(10f, 45f)
-        val activity = Terminal.instance ?: return fontScale
-        activity.terminalView.get()?.setTextSize(fontScale.toInt())
-        return fontScale
+        // Pinch zoom step scaling for terminal font size
+        if (scale < 0.92f || scale > 1.08f) {
+            val increase = scale > 1.0f
+            val currentSize = Settings.terminal_font_size
+            val newSize = if (increase) {
+                (currentSize + 1).coerceAtMost(48)
+            } else {
+                (currentSize - 1).coerceAtLeast(8)
+            }
+            if (newSize != currentSize) {
+                Settings.terminal_font_size = newSize
+                val activity = Terminal.instance
+                activity?.terminalView?.get()?.setTextSize(newSize)
+            }
+            return 1.0f
+        }
+        return scale
     }
 
     override fun onSingleTapUp(e: MotionEvent) {
@@ -220,7 +231,12 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
 
     private fun showSoftInput() {
         val activity = Terminal.instance ?: return
-        activity.terminalView.get()?.requestFocus()
-        activity.terminalView.get()?.let { KeyboardUtils.showSoftInput(it) }
+        val view = activity.terminalView.get() ?: return
+        view.isFocusable = true
+        view.isFocusableInTouchMode = true
+        view.requestFocus()
+        val imm = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+        KeyboardUtils.showSoftInput(view)
     }
 }

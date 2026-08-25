@@ -6,11 +6,11 @@ import com.jcraft.jsch.Session
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
-import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 /**
  * Thread-safe queue-based InputStream for JSch ChannelShell.
@@ -89,6 +89,7 @@ class SSHConnection(private val config: SSHConfig) {
     private var jschSession: Session? = null
     private var shellChannel: ChannelShell? = null
     private var sshInputQueue: SSHQueueInputStream? = null
+    private var readerThread: Thread? = null
     private val isConnectedFlag = AtomicBoolean(false)
 
     val isConnected: Boolean
@@ -159,7 +160,7 @@ class SSHConnection(private val config: SSHConfig) {
             // Keep connection continuous
             session.timeout = 0
             session.serverAliveInterval = 15000
-            session.serverAliveCountMax = 6
+            session.serverAliveCountMax = 10
 
             session.connect(20000)
             jschSession = session
@@ -173,31 +174,39 @@ class SSHConnection(private val config: SSHConfig) {
 
             val inputQueue = SSHQueueInputStream()
             sshInputQueue = inputQueue
-            channel.setInputStream(inputQueue, false)
+            channel.setInputStream(inputQueue, true)
 
-            channel.setOutputStream(object : OutputStream() {
-                override fun write(b: Int) {
-                    onData(byteArrayOf(b.toByte()), 1)
-                }
-                override fun write(b: ByteArray, off: Int, len: Int) {
-                    if (len > 0) {
-                        val copy = b.copyOfRange(off, off + len)
-                        onData(copy, len)
-                    }
-                }
-                override fun flush() {}
-                override fun close() {
-                    if (isConnectedFlag.get()) {
-                        isConnectedFlag.set(false)
-                        cleanup()
-                        onDisconnect(null)
-                    }
-                }
-            }, false)
+            val inStream = channel.inputStream
 
             channel.connect(20000)
             shellChannel = channel
             isConnectedFlag.set(true)
+
+            readerThread =
+                thread(name = "SSH-Reader-${config.host}", isDaemon = true) {
+                    val buffer = ByteArray(4096)
+                    var disconnectReason: String? = null
+                    try {
+                        while (isConnectedFlag.get() && channel.isConnected) {
+                            val read = inStream.read(buffer)
+                            if (read == -1) break
+                            if (read > 0) {
+                                val chunk = buffer.copyOf(read)
+                                onData(chunk, read)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        if (isConnectedFlag.get()) {
+                            disconnectReason = e.message ?: "Connection reset"
+                        }
+                    } finally {
+                        if (isConnectedFlag.get()) {
+                            isConnectedFlag.set(false)
+                            cleanup()
+                            onDisconnect(disconnectReason)
+                        }
+                    }
+                }
         } catch (e: Exception) {
             isConnectedFlag.set(false)
             cleanup()
@@ -223,7 +232,7 @@ class SSHConnection(private val config: SSHConfig) {
 
     @Synchronized
     fun disconnect() {
-        isConnectedFlag.set(false)
+        if (!isConnectedFlag.getAndSet(false)) return
         cleanup()
     }
 
@@ -242,6 +251,9 @@ class SSHConnection(private val config: SSHConfig) {
             jschSession?.disconnect()
         } catch (_: Exception) {}
         jschSession = null
+
+        readerThread?.interrupt()
+        readerThread = null
     }
 
     companion object {
