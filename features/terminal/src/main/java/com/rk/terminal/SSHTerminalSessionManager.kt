@@ -5,6 +5,7 @@ import com.blankj.utilcode.util.ThreadUtils.runOnUiThread
 import com.rk.settings.Settings
 import com.rk.terminal.ssh.SSHTerminalBridge
 import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
+import com.rk.utils.application
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,6 +99,8 @@ object SSHTerminalSessionManager {
         updateSessionList()
         _currentSessionId.value = id
 
+        SessionService.start(context)
+
         bridge.start(
             cols = session.emulator?.mColumns ?: 80,
             rows = session.emulator?.mRows ?: 24,
@@ -148,6 +151,8 @@ object SSHTerminalSessionManager {
         updateSessionList()
         _currentSessionId.value = newId
 
+        SessionService.update(context)
+
         bridge.start(
             cols = session.emulator?.mColumns ?: 80,
             rows = session.emulator?.mRows ?: 24,
@@ -179,6 +184,7 @@ object SSHTerminalSessionManager {
         }
 
         updateSessionList()
+        application?.let { SessionService.update(it) }
         return true
     }
 
@@ -195,6 +201,15 @@ object SSHTerminalSessionManager {
         if (_currentSessionId.value == sessionId) {
             _currentSessionId.value = sessions.keys.firstOrNull() ?: ""
         }
+
+        val app = application
+        if (app != null) {
+            if (sessions.isEmpty()) {
+                SessionService.stop(app)
+            } else {
+                SessionService.update(app)
+            }
+        }
     }
 
     fun terminateSession(sessionId: String) = removeSession(sessionId)
@@ -209,6 +224,8 @@ object SSHTerminalSessionManager {
 
         updateSessionList()
         _currentSessionId.value = ""
+
+        application?.let { SessionService.stop(it) }
     }
 
     private fun updateSessionList() {
