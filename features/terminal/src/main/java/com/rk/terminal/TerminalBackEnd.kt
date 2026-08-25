@@ -51,6 +51,10 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
 
     override fun onTerminalCursorStateChange(state: Boolean) {}
 
+    override fun setTerminalShellPid(session: TerminalSession, pid: Int) {}
+
+    override fun shouldSupportClipboardKeybindings(): Boolean = Settings.terminal_clipboard_keybindings
+
     override fun getTerminalCursorStyle(): Int {
         return when (Settings.terminal_cursor_style) {
             "bar" -> TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR

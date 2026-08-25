@@ -2,6 +2,7 @@ package com.rk.terminal
 
 import android.content.Context
 import com.blankj.utilcode.util.ThreadUtils.runOnUiThread
+import com.rk.settings.Settings
 import com.rk.terminal.ssh.SSHTerminalBridge
 import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
 import com.termux.terminal.TerminalSession
@@ -67,9 +68,7 @@ object SSHTerminalSessionManager {
 
         // Create new TerminalSession
         val session = TerminalSession(
-            null,
-            null,
-            arrayOf(),
+            Settings.terminal_scrollback_buffer,
             client,
         )
 
@@ -109,9 +108,7 @@ object SSHTerminalSessionManager {
         }
 
         val session = TerminalSession(
-            null,
-            null,
-            arrayOf(),
+            Settings.terminal_scrollback_buffer,
             client,
         )
 

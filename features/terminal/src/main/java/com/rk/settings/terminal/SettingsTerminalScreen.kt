@@ -78,8 +78,8 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
         SingleInputDialog(
             title = stringResource(strings.ssh_host),
             inputLabel = stringResource(strings.ssh_host),
-            initialInput = hostValue,
-            onValueChange = { hostValue = it },
+            inputValue = hostValue,
+            onInputValueChange = { hostValue = it },
             onConfirm = {
                 Settings.ssh_host = hostValue.trim()
             },
@@ -91,8 +91,8 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
         SingleInputDialog(
             title = stringResource(strings.ssh_port),
             inputLabel = stringResource(strings.ssh_port),
-            initialInput = portValue,
-            onValueChange = { portValue = it },
+            inputValue = portValue,
+            onInputValueChange = { portValue = it },
             onConfirm = {
                 val port = portValue.toIntOrNull() ?: 22
                 Settings.ssh_port = if (port in 1..65535) port else 22
@@ -105,8 +105,8 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
         SingleInputDialog(
             title = stringResource(strings.ssh_username),
             inputLabel = stringResource(strings.ssh_username),
-            initialInput = usernameValue,
-            onValueChange = { usernameValue = it },
+            inputValue = usernameValue,
+            onInputValueChange = { usernameValue = it },
             onConfirm = {
                 Settings.ssh_username = usernameValue.trim()
             },
@@ -118,9 +118,9 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
         SingleInputDialog(
             title = stringResource(strings.ssh_password),
             inputLabel = stringResource(strings.ssh_password),
-            initialInput = passwordValue,
+            inputValue = passwordValue,
             isPassword = true,
-            onValueChange = { passwordValue = it },
+            onInputValueChange = { passwordValue = it },
             onConfirm = {
                 if (passwordValue.isNotEmpty()) {
                     SSHSecureStorage.savePassword(passwordValue)
@@ -135,9 +135,9 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
         SingleInputDialog(
             title = stringResource(strings.ssh_private_key),
             inputLabel = "-----BEGIN OPENSSH PRIVATE KEY-----...",
-            initialInput = keyValue,
-            singleLine = false,
-            onValueChange = { keyValue = it },
+            inputValue = keyValue,
+            singleLineMode = false,
+            onInputValueChange = { keyValue = it },
             onConfirm = {
                 if (keyValue.isNotBlank()) {
                     SSHSecureStorage.savePrivateKey(keyValue.trim())
@@ -152,9 +152,9 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
         SingleInputDialog(
             title = stringResource(strings.ssh_key_passphrase),
             inputLabel = stringResource(strings.ssh_key_passphrase),
-            initialInput = passphraseValue,
+            inputValue = passphraseValue,
             isPassword = true,
-            onValueChange = { passphraseValue = it },
+            onInputValueChange = { passphraseValue = it },
             onConfirm = {
                 SSHSecureStorage.savePassphrase(passphraseValue)
             },

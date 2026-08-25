@@ -99,7 +99,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val surfaceColor = MaterialTheme.colorScheme.surface.toArgb()
 
-    val drawerWidth = remember { (context.resources.displayMetrics.widthPixels * 0.75f).coerceAtMost(dpToPx(320f)).dp }
+    val drawerWidth = 320.dp
 
     DisposableEffect(Unit) {
         val window = (context as? Activity)?.window
@@ -113,9 +113,9 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
         SingleInputDialog(
             title = stringResource(strings.rename),
             inputLabel = stringResource(strings.name),
-            initialInput = renameValue,
+            inputValue = renameValue,
             errorMessage = renameError,
-            onValueChange = {
+            onInputValueChange = {
                 renameValue = it
                 renameError =
                     if (it.isBlank()) {
@@ -358,7 +358,6 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                     extraKeysJson,
                                     "",
                                     VirtualKeysConstants.CONTROL_CHARS_ALIASES,
-                                    1f,
                                 )
                                 reload(extraKeysInfo)
                             } catch (_: Exception) {}
