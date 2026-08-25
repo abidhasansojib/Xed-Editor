@@ -1,0 +1,139 @@
+package com.rk.lsp
+
+import android.app.Activity
+import android.content.Context
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
+import com.rk.DefaultScope
+import com.rk.activities.main.MainActivity
+import com.rk.activities.main.filterWithFiles
+import com.rk.events.Events
+import com.rk.events.LSPEvent
+import com.rk.file.FileObject
+import com.rk.icons.Icon
+import com.rk.tabs.editor.EditorTab
+import com.rk.tabs.editor.applyHighlightingAndConnectLSP
+import com.rk.theme.greenStatus
+import com.rk.theme.yellowStatus
+import io.github.rosemoe.sora.lsp.requests.Timeouts
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import org.eclipse.lsp4j.ServerCapabilities
+import java.io.File
+import java.net.URI
+
+abstract class LspServer {
+    abstract val id: String
+    abstract val languageName: String
+    abstract val serverName: String
+    abstract val supportedExtensions: List<String>
+    abstract val icon: Icon?
+
+    open val customTimeouts: Map<Timeouts, Int> = emptyMap()
+
+    open val canBeUninstalled = true
+
+    open val expectedCapabilities: ServerCapabilities? = null
+
+    suspend fun startAllInstances(): List<EditorTab> {
+        val connectedEditors = mutableListOf<EditorTab>()
+        _instances.value.forEach { connectedEditors.addAll(it.start()) }
+        return connectedEditors
+    }
+
+    suspend fun stopAllInstances() {
+        _instances.value.forEach { it.stop() }
+    }
+
+    suspend fun disconnectAllInstances() {
+        _instances.value.forEach { it.disconnect() }
+    }
+
+    suspend fun restartAllInstances() {
+        _instances.value.forEach { it.restart() }
+    }
+
+    fun connectAllSuitableEditors(excludedEditors: List<EditorTab> = emptyList()) {
+        val viewModel = MainActivity.instance!!.viewModel
+        val suitableTabs =
+            viewModel.editorTabs.filterWithFiles { it, file ->
+                !excludedEditors.contains(it) && this@LspServer.supportedExtensions.contains(file.getExtension())
+            }
+        suitableTabs.forEach { it.applyHighlightingAndConnectLSP() }
+    }
+
+    private val _instances = MutableStateFlow<List<LspServerInstance>>(emptyList())
+    val instances: StateFlow<List<LspServerInstance>> = _instances.asStateFlow()
+
+    fun addInstance(instance: LspServerInstance) {
+        _instances.update { it + instance }
+        DefaultScope.launch {
+            Events.publish(LSPEvent.InstanceCreated(instance))
+        }
+    }
+
+    fun removeInstance(instance: LspServerInstance) {
+        _instances.update { it - instance }
+    }
+
+    abstract suspend fun isInstalled(context: Context): Boolean
+
+    abstract fun install(activity: Activity)
+
+    abstract fun uninstall(activity: Activity)
+
+    abstract suspend fun hasUpdate(context: Context): Boolean
+
+    @Deprecated("Rename to hasUpdate instead.", ReplaceWith("hasUpdate(context)"))
+    open suspend fun isUpdatable(context: Context): Boolean {
+        return hasUpdate(context)
+    }
+
+    abstract fun update(activity: Activity)
+
+    abstract fun getConnectionConfig(): LspConnectionConfig
+
+    open suspend fun beforeConnect() {}
+
+    open suspend fun onInitialize(lspConnector: LspConnector) {}
+
+    open fun getInitializationOptions(uri: URI?): Any? = null
+
+    open fun isSupported(file: FileObject): Boolean {
+        return supportedExtensions.contains(file.getExtension().lowercase())
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as LspServer
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = id.hashCode()
+}
+
+@Composable
+fun LspServer.getDominantStatusColor(): Color? {
+    val instances by this.instances.collectAsStateWithLifecycle()
+    val hasAnyError = instances.any { it.hasError.value }
+    if (hasAnyError) return MaterialTheme.colorScheme.error
+
+    val dominantStatus = instances.maxByOrNull { it.status.value.ordinal }?.status?.value ?: LspConnectionStatus.NOT_RUNNING
+    return when (dominantStatus) {
+        LspConnectionStatus.CRASHED,
+        LspConnectionStatus.TIMEOUT -> MaterialTheme.colorScheme.error
+        LspConnectionStatus.STARTING,
+        LspConnectionStatus.RESTARTING,
+        LspConnectionStatus.STOPPING -> MaterialTheme.colorScheme.yellowStatus
+        LspConnectionStatus.RUNNING -> MaterialTheme.colorScheme.greenStatus
+        else -> null
+    }
+}

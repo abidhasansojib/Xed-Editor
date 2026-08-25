@@ -1,0 +1,17 @@
+.gradle
+.idea
+.kotlin
+build/
+app/build/
+core/main/build/
+core/components/build/
+core/resources/build/
+soraX/editor/build/
+soraX/oniguruma-native/build/
+soraX/editor-lsp/build/
+soraX/language-textmate/build/
+baselineprofile/build/
+benchmark/build/
+benchmark2/build/
+local.properties
+*.apk
