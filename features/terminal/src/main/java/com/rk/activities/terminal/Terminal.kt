@@ -1,16 +1,19 @@
 package com.rk.activities.terminal
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.rk.activities.settings.SettingsRoutes
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.rk.settings.Settings
 import com.rk.terminal.SSHTerminalSessionManager
+import com.rk.terminal.SessionService
 import com.rk.terminal.TerminalBackEnd
 import com.rk.terminal.TerminalScreen
-import com.rk.terminal.ssh.SSHConfig
 import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
 import com.rk.terminal.virtualkeys.VirtualKeysListener
 import com.rk.terminal.virtualkeys.VirtualKeysView
@@ -22,10 +25,23 @@ class Terminal : ComponentActivity() {
     var terminalView = WeakReference<TerminalView>(null)
     var virtualKeysView = WeakReference<VirtualKeysView>(null)
 
+    private val requestNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                SessionService.update(this)
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         instance = this
         enableEdgeToEdge()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
 
         val initialCommand = intent.getStringExtra("initial_command")
 
@@ -61,6 +77,7 @@ class Terminal : ComponentActivity() {
         }
 
         SSHTerminalSessionManager.switchSession(sessionId)
+        SessionService.update(this)
     }
 
     override fun onResume() {

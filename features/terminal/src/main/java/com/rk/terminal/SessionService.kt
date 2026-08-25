@@ -17,7 +17,6 @@ import com.rk.activities.terminal.Terminal
 import com.rk.resources.drawables
 import com.rk.resources.getString
 import com.rk.resources.strings
-import com.rk.settings.Settings
 
 /**
  * Foreground Service for SSH Terminal sessions.
@@ -62,6 +61,17 @@ class SessionService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 SSHTerminalSessionManager.terminateAll()
+                Terminal.instance?.let { act ->
+                    act.runOnUiThread {
+                        act.finishAndRemoveTask()
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
                 stopSelf()
                 return START_NOT_STICKY
             }
