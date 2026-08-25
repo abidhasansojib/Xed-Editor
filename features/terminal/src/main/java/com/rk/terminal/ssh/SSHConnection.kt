@@ -226,7 +226,9 @@ class SSHConnection(private val config: SSHConfig) {
         val safeCols = if (cols < 20) 80 else cols
         val safeRows = if (rows < 5) 24 else rows
         try {
-            shellChannel?.setPtySize(safeCols, safeRows, width, height)
+            if (isConnectedFlag.get() && shellChannel?.isConnected == true) {
+                shellChannel?.setPtySize(safeCols, safeRows, width, height)
+            }
         } catch (_: Exception) {}
     }
 
