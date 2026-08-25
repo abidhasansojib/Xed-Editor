@@ -724,7 +724,7 @@ open class EditorTab(
     override val showGlobalActions: Boolean = false
 
     override fun hashCode(): Int {
-        return file?.hashCode() ?: customTitle?.hashCode() ?: super.hashCode()
+        return file?.hashCode() ?: id.hashCode()
     }
 
     override fun equals(other: Any?): Boolean {
@@ -735,7 +735,7 @@ open class EditorTab(
         return if (file != null && other.file != null) {
             other.file == file
         } else if (file == null && other.file == null) {
-            customTitle == other.customTitle
+            id == other.id
         } else {
             false
         }

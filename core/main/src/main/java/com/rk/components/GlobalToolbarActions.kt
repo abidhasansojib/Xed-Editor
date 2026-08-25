@@ -9,14 +9,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.rk.activities.main.MainActivity
 import com.rk.activities.main.MainViewModel
@@ -32,6 +33,7 @@ import com.rk.icons.CreateNewFile
 import com.rk.icons.XedIcon
 import com.rk.icons.XedIcons
 import com.rk.resources.drawables
+import com.rk.resources.getString
 import com.rk.resources.strings
 import com.rk.search.CodeSearchDialog
 import com.rk.search.FileSearchDialog
@@ -42,6 +44,8 @@ import kotlinx.coroutines.launch
 
 object GlobalDialogs {
     val addDialog = MutableStateFlow(false)
+
+    val tempFileDialog = MutableStateFlow(false)
 
     val fileSearchDialog = MutableStateFlow(false)
 
@@ -61,6 +65,7 @@ fun GlobalToolbarActions(viewModel: MainViewModel, drawerViewModel: DrawerViewMo
     val currentDrawerTab = drawerTabs.getOrNull(currentDrawerTabIndex)
 
     val addDialog by GlobalDialogs.addDialog.collectAsStateWithLifecycle()
+    val tempFileDialog by GlobalDialogs.tempFileDialog.collectAsStateWithLifecycle()
     val fileSearchDialog by GlobalDialogs.fileSearchDialog.collectAsStateWithLifecycle()
     val codeSearchDialog by GlobalDialogs.codeSearchDialog.collectAsStateWithLifecycle()
 
@@ -115,27 +120,47 @@ fun GlobalToolbarActions(viewModel: MainViewModel, drawerViewModel: DrawerViewMo
         )
     }
 
+    if (tempFileDialog) {
+        var tempFileName by remember { mutableStateOf("newfile.txt") }
+        var errorMessage by remember { mutableStateOf<String?>(null) }
+
+        SingleInputDialog(
+            title = stringResource(strings.temp_file),
+            inputLabel = stringResource(strings.file_name),
+            inputValue = tempFileName,
+            errorMessage = errorMessage,
+            confirmEnabled = tempFileName.isNotBlank() && errorMessage == null,
+            onInputValueChange = {
+                tempFileName = it
+                errorMessage = when {
+                    it.isBlank() -> strings.name_empty_err.getString()
+                    it.contains("/") || it.contains("\\") -> strings.invalid_name.getString()
+                    else -> null
+                }
+            },
+            onConfirm = {
+                val cleanName = tempFileName.trim()
+                if (cleanName.isNotBlank() && !cleanName.contains("/") && !cleanName.contains("\\")) {
+                    val ext = if (cleanName.contains('.')) cleanName.substringAfterLast('.') else "txt"
+                    viewModel.editorManager.addEditorTab(
+                        file = null,
+                        customTitle = cleanName,
+                        fallbackExtension = ext,
+                    )
+                }
+            },
+            onFinish = {
+                GlobalDialogs.tempFileDialog.value = false
+            },
+        )
+    }
+
     if (addDialog) {
         ModalBottomSheet(onDismissRequest = { GlobalDialogs.addDialog.value = false }) {
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 0.dp)) {
                 AddDialogItem(resId = drawables.file, title = stringResource(strings.temp_file)) {
                     GlobalDialogs.addDialog.value = false
-
-                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
-                    intent.addCategory(Intent.CATEGORY_OPENABLE)
-                    intent.type = "application/octet-stream"
-                    intent.putExtra(Intent.EXTRA_TITLE, "newfile.txt")
-
-                    val activities =
-                        application!!.packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
-
-                    if (activities.isEmpty()) {
-                        errorDialog(strings.unsupported_feature)
-                        return@AddDialogItem
-                    }
-
-                    val title = viewModel.getNextUntitledTitle()
-                    viewModel.editorManager.addEditorTab(file = null, customTitle = title)
+                    GlobalDialogs.tempFileDialog.value = true
                 }
 
                 AddDialogItem(icon = XedIcons.CreateNewFile, title = stringResource(strings.new_file)) {

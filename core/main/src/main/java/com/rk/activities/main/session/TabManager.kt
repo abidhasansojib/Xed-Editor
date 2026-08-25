@@ -126,7 +126,12 @@ class TabManager {
         }
     }
 
-    fun removeTab(tab: Tab) = removeTab(_tabs.indexOf(tab))
+    fun removeTab(tab: Tab) {
+        val index = _tabs.indexOfFirst { it == tab || it.id == tab.id }
+        if (index != -1) {
+            removeTab(index)
+        }
+    }
 
     fun moveTab(from: Int, to: Int) {
         if (from == to || from !in _tabs.indices || to !in _tabs.indices) return

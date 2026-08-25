@@ -149,19 +149,16 @@ fun MainContent(
                                 index = index,
                                 showIcon = Settings.show_tab_icons,
                                 onCloseThis = {
-                                    val tabIndex = mainViewModel.tabs.indexOf(tabState)
-                                    if (tabIndex == -1) return@TabItem
-
                                     if (tabState is EditorTab && tabState.editorState.isDirty) {
                                         dialogRes(
                                             title = strings.file_unsaved.getString(),
                                             msg = strings.ask_unsaved.getString(),
-                                            onOk = { mainViewModel.tabManager.removeTab(tabIndex) },
+                                            onOk = { mainViewModel.tabManager.removeTab(tabState) },
                                             onCancel = {},
                                             okRes = strings.discard,
                                         )
                                     } else {
-                                        mainViewModel.tabManager.removeTab(tabIndex)
+                                        mainViewModel.tabManager.removeTab(tabState)
                                     }
                                 },
                                 onCloseOthers = { index ->
