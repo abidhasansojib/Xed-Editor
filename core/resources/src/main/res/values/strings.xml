@@ -840,5 +840,4 @@
     <string name="browse_container_files">Browse container files</string>
     <string name="quick_access">Quick Access</string>
     <string name="rootfs_root">Container Rootfs (/)</string>
-    <string name="session_name_exists">A session with this name already exists</string>
 </resources>
