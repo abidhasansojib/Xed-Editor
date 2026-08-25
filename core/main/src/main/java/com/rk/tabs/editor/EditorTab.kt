@@ -114,7 +114,7 @@ open class EditorTab(
 
     val scope = CoroutineScope(Dispatchers.Default)
 
-    override var title by mutableStateOf(customTitle ?: file?.getName() ?: strings.temp_file.getString())
+    override var title by mutableStateOf(customTitle ?: file?.getName() ?: strings.untitled.getString())
 
     val editorState by mutableStateOf(CodeEditorState(initialContent))
 

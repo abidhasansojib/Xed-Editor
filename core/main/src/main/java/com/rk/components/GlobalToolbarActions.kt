@@ -45,8 +45,6 @@ import kotlinx.coroutines.launch
 object GlobalDialogs {
     val addDialog = MutableStateFlow(false)
 
-    val tempFileDialog = MutableStateFlow(false)
-
     val fileSearchDialog = MutableStateFlow(false)
 
     val codeSearchDialog = MutableStateFlow(false)
@@ -65,7 +63,6 @@ fun GlobalToolbarActions(viewModel: MainViewModel, drawerViewModel: DrawerViewMo
     val currentDrawerTab = drawerTabs.getOrNull(currentDrawerTabIndex)
 
     val addDialog by GlobalDialogs.addDialog.collectAsStateWithLifecycle()
-    val tempFileDialog by GlobalDialogs.tempFileDialog.collectAsStateWithLifecycle()
     val fileSearchDialog by GlobalDialogs.fileSearchDialog.collectAsStateWithLifecycle()
     val codeSearchDialog by GlobalDialogs.codeSearchDialog.collectAsStateWithLifecycle()
 
@@ -120,49 +117,9 @@ fun GlobalToolbarActions(viewModel: MainViewModel, drawerViewModel: DrawerViewMo
         )
     }
 
-    if (tempFileDialog) {
-        var tempFileName by remember { mutableStateOf("newfile.txt") }
-        var errorMessage by remember { mutableStateOf<String?>(null) }
-
-        SingleInputDialog(
-            title = stringResource(strings.temp_file),
-            inputLabel = stringResource(strings.file_name),
-            inputValue = tempFileName,
-            errorMessage = errorMessage,
-            confirmEnabled = tempFileName.isNotBlank() && errorMessage == null,
-            onInputValueChange = {
-                tempFileName = it
-                errorMessage = when {
-                    it.isBlank() -> strings.name_empty_err.getString()
-                    it.contains("/") || it.contains("\\") -> strings.invalid_characters.getString()
-                    else -> null
-                }
-            },
-            onConfirm = {
-                val cleanName = tempFileName.trim()
-                if (cleanName.isNotBlank() && !cleanName.contains("/") && !cleanName.contains("\\")) {
-                    val ext = if (cleanName.contains('.')) cleanName.substringAfterLast('.') else "txt"
-                    viewModel.editorManager.addEditorTab(
-                        file = null,
-                        customTitle = cleanName,
-                        fallbackExtension = ext,
-                    )
-                }
-            },
-            onFinish = {
-                GlobalDialogs.tempFileDialog.value = false
-            },
-        )
-    }
-
     if (addDialog) {
         ModalBottomSheet(onDismissRequest = { GlobalDialogs.addDialog.value = false }) {
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 0.dp)) {
-                AddDialogItem(resId = drawables.file, title = stringResource(strings.temp_file)) {
-                    GlobalDialogs.addDialog.value = false
-                    GlobalDialogs.tempFileDialog.value = true
-                }
-
                 AddDialogItem(icon = XedIcons.CreateNewFile, title = stringResource(strings.new_file)) {
                     GlobalDialogs.addDialog.value = false
                     val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)

@@ -2,9 +2,9 @@ package com.rk.terminal
 
 import android.content.Context
 import com.blankj.utilcode.util.ThreadUtils.runOnUiThread
+import com.rk.droidspaces.DroidspacesConstants
+import com.rk.droidspaces.DroidspacesManager
 import com.rk.settings.Settings
-import com.rk.terminal.ssh.SSHTerminalBridge
-import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
 import com.rk.utils.application
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -14,12 +14,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Global singleton managing continuous SSH Terminal sessions across Activity lifecycle.
+ * Global singleton managing continuous Droidspaces Terminal sessions across Activity lifecycle.
  * Prevents duplicating sessions when reopening the terminal from 3-dot menu or home page.
  */
-object SSHTerminalSessionManager {
+object DroidspacesTerminalSessionManager {
     private val sessions = LinkedHashMap<String, TerminalSession>()
-    private val bridges = ConcurrentHashMap<String, SSHTerminalBridge>()
+    private val sessionUsers = ConcurrentHashMap<String, String>()
+    private val sessionContainers = ConcurrentHashMap<String, String>()
 
     private val _sessionList = MutableStateFlow<List<String>>(emptyList())
     val sessionList: StateFlow<List<String>> = _sessionList.asStateFlow()
@@ -36,10 +37,30 @@ object SSHTerminalSessionManager {
         return if (id.isNotEmpty()) sessions[id] else sessions.values.firstOrNull()
     }
 
+    private fun buildSessionEnv(user: String): Array<String> {
+        val env = mutableListOf(
+            "TERM=xterm-256color",
+            "COLORTERM=truecolor",
+            "LANG=C.UTF-8",
+            "HOME=${if (user == "root") "/root" else "/home/$user"}",
+            "PATH=${DroidspacesConstants.INSTALL_PATH}:/sbin:/system/bin:/system/xbin:${System.getenv("PATH") ?: ""}",
+        )
+        System.getenv("EXTERNAL_STORAGE")?.let { env.add("EXTERNAL_STORAGE=$it") }
+        listOf(
+            "ANDROID_ART_ROOT", "ANDROID_DATA", "ANDROID_I18N_ROOT",
+            "ANDROID_ROOT", "ANDROID_RUNTIME_ROOT", "ANDROID_TZDATA_ROOT",
+        ).forEach { key ->
+            System.getenv(key)?.let { env.add("$key=$it") }
+        }
+        return env.toTypedArray()
+    }
+
     fun getOrCreateSession(
         context: Context,
         client: TerminalSessionClient,
         requestedId: String? = null,
+        containerName: String? = null,
+        user: String? = null,
         initialCommand: String? = null,
     ): TerminalSession {
         val id = requestedId ?: if (sessions.isNotEmpty()) {
@@ -54,57 +75,39 @@ object SSHTerminalSessionManager {
 
         sessions[id]?.let { existingSession ->
             existingSession.updateTerminalSessionClient(client)
-            bridges[id]?.let { bridge ->
-                bridge.sessionClient = client
-                if (!bridge.isConnected) {
-                    bridge.start(
-                        existingSession.emulator?.mColumns ?: 80,
-                        existingSession.emulator?.mRows ?: 24,
-                    )
-                }
-            }
             _currentSessionId.value = id
             return existingSession
         }
 
-        // Create new TerminalSession
+        val effectiveContainer = containerName ?: Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
+        val effectiveUser = user ?: Settings.droidspaces_terminal_default_user.ifBlank { "root" }
+
+        val bin = DroidspacesManager.getDroidspacesBinary()
+        val escapedName = effectiveContainer.replace("'", "'\\''")
+        val userArg = if (effectiveUser.isNotBlank()) " $effectiveUser" else ""
+        val shArg = "su -c '$bin --name=\"$escapedName\" enter$userArg'"
+
         val session = TerminalSession(
+            "/system/bin/sh",
+            "/sdcard",
+            arrayOf("/system/bin/sh", "-c", shArg),
+            buildSessionEnv(effectiveUser),
             Settings.terminal_scrollback_buffer,
             client,
         )
 
-        val bridge = SSHTerminalBridge(
-            context = context.applicationContext,
-            session = session,
-            sessionClient = client,
-            sessionId = id,
-            initialCommand = initialCommand,
-        )
-
-        // Set custom writer so typing from soft keyboard and virtual keys forwards to SSH!
-        session.setCustomWriter(object : TerminalSession.TerminalSessionWriter {
-            override fun write(data: ByteArray, offset: Int, count: Int) {
-                bridge.write(data, offset, count)
-            }
-
-            override fun onResize(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
-                bridge.resize(columns, rows, cellWidthPixels, cellHeightPixels)
-            }
-        })
-
-        bridges[id] = bridge
-        SSHTerminalBridgeRegistry.register(id, bridge)
         sessions[id] = session
+        sessionUsers[id] = effectiveUser
+        sessionContainers[id] = effectiveContainer
 
         updateSessionList()
         _currentSessionId.value = id
 
         SessionService.start(context)
 
-        bridge.start(
-            cols = session.emulator?.mColumns ?: 80,
-            rows = session.emulator?.mRows ?: 24,
-        )
+        if (!initialCommand.isNullOrBlank()) {
+            session.write(initialCommand + "\n")
+        }
 
         return session
     }
@@ -112,51 +115,46 @@ object SSHTerminalSessionManager {
     fun createNewTabSession(
         context: Context,
         client: TerminalSessionClient,
+        containerName: String? = null,
+        user: String? = null,
         initialCommand: String? = null,
     ): TerminalSession {
+        val effectiveContainer = containerName ?: Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
+        val effectiveUser = user ?: Settings.droidspaces_terminal_default_user.ifBlank { "root" }
+
         var index = 1
-        var newId = "main #$index"
+        var newId = "$effectiveUser #$index"
         while (sessions.containsKey(newId)) {
             index++
-            newId = "main #$index"
+            newId = "$effectiveUser #$index"
         }
 
+        val bin = DroidspacesManager.getDroidspacesBinary()
+        val escapedName = effectiveContainer.replace("'", "'\\''")
+        val userArg = if (effectiveUser.isNotBlank()) " $effectiveUser" else ""
+        val shArg = "su -c '$bin --name=\"$escapedName\" enter$userArg'"
+
         val session = TerminalSession(
+            "/system/bin/sh",
+            "/sdcard",
+            arrayOf("/system/bin/sh", "-c", shArg),
+            buildSessionEnv(effectiveUser),
             Settings.terminal_scrollback_buffer,
             client,
         )
 
-        val bridge = SSHTerminalBridge(
-            context = context.applicationContext,
-            session = session,
-            sessionClient = client,
-            sessionId = newId,
-            initialCommand = initialCommand,
-        )
-
-        session.setCustomWriter(object : TerminalSession.TerminalSessionWriter {
-            override fun write(data: ByteArray, offset: Int, count: Int) {
-                bridge.write(data, offset, count)
-            }
-
-            override fun onResize(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
-                bridge.resize(columns, rows, cellWidthPixels, cellHeightPixels)
-            }
-        })
-
-        bridges[newId] = bridge
-        SSHTerminalBridgeRegistry.register(newId, bridge)
         sessions[newId] = session
+        sessionUsers[newId] = effectiveUser
+        sessionContainers[newId] = effectiveContainer
 
         updateSessionList()
         _currentSessionId.value = newId
 
         SessionService.update(context)
 
-        bridge.start(
-            cols = session.emulator?.mColumns ?: 80,
-            rows = session.emulator?.mRows ?: 24,
-        )
+        if (!initialCommand.isNullOrBlank()) {
+            session.write(initialCommand + "\n")
+        }
 
         return session
     }
@@ -170,14 +168,12 @@ object SSHTerminalSessionManager {
     fun renameSession(oldId: String, newId: String): Boolean {
         if (oldId == newId || newId.isBlank() || sessions.containsKey(newId)) return false
         val session = sessions.remove(oldId) ?: return false
-        val bridge = bridges.remove(oldId)
+        val u = sessionUsers.remove(oldId) ?: "root"
+        val c = sessionContainers.remove(oldId) ?: "Ubuntu"
 
         sessions[newId] = session
-        if (bridge != null) {
-            SSHTerminalBridgeRegistry.remove(oldId)
-            bridges[newId] = bridge
-            SSHTerminalBridgeRegistry.register(newId, bridge)
-        }
+        sessionUsers[newId] = u
+        sessionContainers[newId] = c
 
         if (_currentSessionId.value == oldId) {
             _currentSessionId.value = newId
@@ -189,9 +185,8 @@ object SSHTerminalSessionManager {
     }
 
     fun removeSession(sessionId: String) {
-        val bridge = bridges.remove(sessionId)
-        bridge?.disconnect()
-        SSHTerminalBridgeRegistry.remove(sessionId)
+        sessionUsers.remove(sessionId)
+        sessionContainers.remove(sessionId)
 
         val session = sessions.remove(sessionId)
         session?.finishIfRunning()
@@ -215,12 +210,10 @@ object SSHTerminalSessionManager {
     fun terminateSession(sessionId: String) = removeSession(sessionId)
 
     fun terminateAll() {
-        bridges.values.forEach { it.disconnect() }
-        bridges.clear()
-        SSHTerminalBridgeRegistry.removeAll()
-
         sessions.values.forEach { it.finishIfRunning() }
         sessions.clear()
+        sessionUsers.clear()
+        sessionContainers.clear()
 
         updateSessionList()
         _currentSessionId.value = ""

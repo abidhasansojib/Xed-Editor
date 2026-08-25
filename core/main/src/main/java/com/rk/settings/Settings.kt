@@ -198,7 +198,7 @@ object Settings {
     var file_mask by CachedPreference("file_mask", "")
     var formatters by CachedPreference("formatters", "")
 
-    // Terminal and SSH settings
+    // Terminal and Droidspaces Container settings
     var is_terminal_font_asset by CachedPreference("is_terminal_font_asset", false)
     var terminal_clipboard_keybindings by CachedPreference("terminal_clipboard_keybindings", true)
     var terminal_font_size by CachedPreference("terminal_font_size", 14)
@@ -206,12 +206,10 @@ object Settings {
     var terminal_font_path by CachedPreference("terminal_font_path", "")
     var terminal_cursor_style by CachedPreference("terminal_cursor_style", "block")
     var terminal_extra_keys by CachedPreference("terminal_extra_keys", DEFAULT_TERMINAL_EXTRA_KEYS)
-    var use_ssh_terminal by CachedPreference("use_ssh_terminal", true)
-    var ssh_port by CachedPreference("ssh_port", 22)
-    var ssh_host by CachedPreference("ssh_host", "")
-    var ssh_username by CachedPreference("ssh_username", "")
-    var ssh_auth_type by CachedPreference("ssh_auth_type", "password")
-    var ssh_key_path by CachedPreference("ssh_key_path", "")
+    var droidspaces_container_name by CachedPreference("droidspaces_container_name", "Ubuntu")
+    var droidspaces_binary_path by CachedPreference("droidspaces_binary_path", "/data/local/Droidspaces/bin/droidspaces")
+    var droidspaces_terminal_default_user by CachedPreference("droidspaces_terminal_default_user", "")
+    var droidspaces_storage_default_user by CachedPreference("droidspaces_storage_default_user", "")
 
     // Long settings
     var last_update_check_timestamp by CachedPreference("last_update", 0L)

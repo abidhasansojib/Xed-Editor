@@ -1,9 +1,8 @@
 package com.rk.settings.terminal
 
-import android.content.Context
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import android.app.Activity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,13 +21,14 @@ import com.rk.components.SingleInputDialog
 import com.rk.components.SteppedValueSlider
 import com.rk.components.compose.preferences.base.PreferenceGroup
 import com.rk.components.compose.preferences.base.PreferenceLayout
+import com.rk.droidspaces.ContainerStatus
+import com.rk.droidspaces.ContainerUser
+import com.rk.droidspaces.DroidspacesBinaryInstaller
+import com.rk.droidspaces.DroidspacesConstants
+import com.rk.droidspaces.DroidspacesManager
 import com.rk.resources.getString
 import com.rk.resources.strings
 import com.rk.settings.Settings
-import com.rk.terminal.ssh.SSHConfig
-import com.rk.terminal.ssh.SSHConnection
-import com.rk.terminal.ssh.SSHSecureStorage
-import com.rk.utils.LoadingPopup
 import com.rk.utils.dialogRes
 import com.rk.utils.toast
 import com.termux.terminal.TerminalEmulator
@@ -51,231 +51,255 @@ enum class TerminalCursorStyle(val value: String, val stringRes: Int) {
 @Composable
 fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val scope = rememberCoroutineScope()
 
-    var showHostDialog by remember { mutableStateOf(false) }
-    var hostValue by remember { mutableStateOf(Settings.ssh_host) }
+    var containerName by remember {
+        mutableStateOf(Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME })
+    }
+    var binaryPath by remember { mutableStateOf(Settings.droidspaces_binary_path) }
+    var defaultTerminalUser by remember { mutableStateOf(Settings.droidspaces_terminal_default_user) }
+    var defaultStorageUser by remember { mutableStateOf(Settings.droidspaces_storage_default_user) }
 
-    var showPortDialog by remember { mutableStateOf(false) }
-    var portValue by remember { mutableStateOf(Settings.ssh_port.toString()) }
+    var containerUsers by remember { mutableStateOf<List<ContainerUser>>(emptyList()) }
+    var containerStatus by remember { mutableStateOf(ContainerStatus.NOT_FOUND) }
+    var isRootAvailable by remember { mutableStateOf(false) }
 
-    var showUsernameDialog by remember { mutableStateOf(false) }
-    var usernameValue by remember { mutableStateOf(Settings.ssh_username) }
+    var showContainerNameDialog by remember { mutableStateOf(false) }
+    var showBinaryPathDialog by remember { mutableStateOf(false) }
+    var showCustomTerminalUserDialog by remember { mutableStateOf(false) }
+    var showCustomStorageUserDialog by remember { mutableStateOf(false) }
+    var customTerminalUserValue by remember { mutableStateOf("") }
+    var customStorageUserValue by remember { mutableStateOf("") }
 
-    var showPasswordDialog by remember { mutableStateOf(false) }
-    var passwordValue by remember { mutableStateOf("") }
+    var isTestingConnection by remember { mutableStateOf(false) }
+    var isInstallingBusybox by remember { mutableStateOf(false) }
 
-    var showKeyDialog by remember { mutableStateOf(false) }
-    var keyValue by remember { mutableStateOf("") }
+    suspend fun refreshContainerInfo() {
+        isRootAvailable = DroidspacesManager.checkRootAccess()
+        containerStatus = DroidspacesManager.getContainerStatus(containerName)
+        containerUsers = DroidspacesManager.getContainerUsers(containerName, useCache = false)
+    }
 
-    var showPassphraseDialog by remember { mutableStateOf(false) }
-    var passphraseValue by remember { mutableStateOf("") }
+    LaunchedEffect(containerName) {
+        refreshContainerInfo()
+    }
 
-    var hasPassword by remember { mutableStateOf(SSHSecureStorage.hasPassword()) }
-    var hasPrivateKey by remember { mutableStateOf(SSHSecureStorage.hasPrivateKey()) }
-
-    if (showHostDialog) {
+    if (showContainerNameDialog) {
         SingleInputDialog(
-            title = stringResource(strings.ssh_host),
-            inputLabel = stringResource(strings.ssh_host),
-            inputValue = hostValue,
-            onInputValueChange = { hostValue = it },
+            title = stringResource(strings.container_name),
+            inputLabel = stringResource(strings.container_name),
+            inputValue = containerName,
+            onInputValueChange = { containerName = it },
             onConfirm = {
-                Settings.ssh_host = hostValue.trim()
+                val clean = containerName.trim().ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
+                containerName = clean
+                Settings.droidspaces_container_name = clean
+                scope.launch { refreshContainerInfo() }
             },
-            onFinish = { showHostDialog = false },
+            onFinish = { showContainerNameDialog = false },
         )
     }
 
-    if (showPortDialog) {
+    if (showBinaryPathDialog) {
         SingleInputDialog(
-            title = stringResource(strings.ssh_port),
-            inputLabel = stringResource(strings.ssh_port),
-            inputValue = portValue,
-            onInputValueChange = { portValue = it },
+            title = stringResource(strings.droidspaces_binary_path),
+            inputLabel = stringResource(strings.droidspaces_binary_path),
+            inputValue = binaryPath,
+            onInputValueChange = { binaryPath = it },
             onConfirm = {
-                val port = portValue.toIntOrNull() ?: 22
-                Settings.ssh_port = if (port in 1..65535) port else 22
+                val clean = binaryPath.trim().ifBlank { DroidspacesConstants.DEFAULT_DROIDSPACES_BINARY }
+                binaryPath = clean
+                Settings.droidspaces_binary_path = clean
+                scope.launch { refreshContainerInfo() }
             },
-            onFinish = { showPortDialog = false },
+            onFinish = { showBinaryPathDialog = false },
         )
     }
 
-    if (showUsernameDialog) {
+    if (showCustomTerminalUserDialog) {
         SingleInputDialog(
-            title = stringResource(strings.ssh_username),
-            inputLabel = stringResource(strings.ssh_username),
-            inputValue = usernameValue,
-            onInputValueChange = { usernameValue = it },
+            title = stringResource(strings.default_terminal_user),
+            inputLabel = stringResource(strings.enter_username),
+            inputValue = customTerminalUserValue,
+            onInputValueChange = { customTerminalUserValue = it },
             onConfirm = {
-                Settings.ssh_username = usernameValue.trim()
+                val clean = customTerminalUserValue.trim()
+                defaultTerminalUser = clean
+                Settings.droidspaces_terminal_default_user = clean
             },
-            onFinish = { showUsernameDialog = false },
+            onFinish = { showCustomTerminalUserDialog = false },
         )
     }
 
-    if (showPasswordDialog) {
+    if (showCustomStorageUserDialog) {
         SingleInputDialog(
-            title = stringResource(strings.ssh_password),
-            inputLabel = stringResource(strings.ssh_password),
-            inputValue = passwordValue,
-            isPassword = true,
-            onInputValueChange = { passwordValue = it },
+            title = stringResource(strings.default_storage_user),
+            inputLabel = stringResource(strings.enter_username),
+            inputValue = customStorageUserValue,
+            onInputValueChange = { customStorageUserValue = it },
             onConfirm = {
-                SSHSecureStorage.savePassword(passwordValue)
-                hasPassword = passwordValue.isNotEmpty()
+                val clean = customStorageUserValue.trim()
+                defaultStorageUser = clean
+                Settings.droidspaces_storage_default_user = clean
             },
-            onFinish = { showPasswordDialog = false },
-        )
-    }
-
-    if (showKeyDialog) {
-        SingleInputDialog(
-            title = stringResource(strings.ssh_private_key),
-            inputLabel = "-----BEGIN OPENSSH PRIVATE KEY-----...",
-            inputValue = keyValue,
-            singleLineMode = false,
-            onInputValueChange = { keyValue = it },
-            onConfirm = {
-                SSHSecureStorage.savePrivateKey(keyValue.trim())
-                hasPrivateKey = keyValue.trim().isNotEmpty()
-            },
-            onFinish = { showKeyDialog = false },
-        )
-    }
-
-    if (showPassphraseDialog) {
-        SingleInputDialog(
-            title = stringResource(strings.ssh_key_passphrase),
-            inputLabel = stringResource(strings.ssh_key_passphrase),
-            inputValue = passphraseValue,
-            isPassword = true,
-            onInputValueChange = { passphraseValue = it },
-            onConfirm = {
-                SSHSecureStorage.savePassphrase(passphraseValue)
-            },
-            onFinish = { showPassphraseDialog = false },
+            onFinish = { showCustomStorageUserDialog = false },
         )
     }
 
     PreferenceLayout(label = stringResource(id = strings.terminal), backArrowVisible = true) {
-        PreferenceGroup(heading = stringResource(strings.ssh_configuration)) {
+        PreferenceGroup(heading = stringResource(strings.droidspaces_configuration)) {
             SettingsItem(
-                label = stringResource(strings.ssh_host),
-                description = if (Settings.ssh_host.isNotBlank()) Settings.ssh_host else stringResource(strings.ssh_host_desc),
+                label = stringResource(strings.container_name),
+                description = containerName,
                 showSwitch = false,
                 default = false,
-                onClick = {
-                    hostValue = Settings.ssh_host
-                    showHostDialog = true
-                },
+                onClick = { showContainerNameDialog = true },
             )
 
-            SettingsItem(
-                label = stringResource(strings.ssh_port),
-                description = Settings.ssh_port.toString(),
-                showSwitch = false,
-                default = false,
-                onClick = {
-                    portValue = Settings.ssh_port.toString()
-                    showPortDialog = true
-                },
+            // Terminal Default User Dropdown
+            val terminalUserItems = mutableListOf(
+                "" to strings.ask_every_time.getString(),
+                "root" to strings.root_user.getString(),
             )
+            containerUsers.filter { !it.isRoot }.forEach { u ->
+                terminalUserItems.add(u.username to "${u.username} (${u.homeDir})")
+            }
+            terminalUserItems.add("__custom__" to strings.custom_user.getString())
 
-            SettingsItem(
-                label = stringResource(strings.ssh_username),
-                description = if (Settings.ssh_username.isNotBlank()) Settings.ssh_username else stringResource(strings.ssh_username_desc),
-                showSwitch = false,
-                default = false,
-                onClick = {
-                    usernameValue = Settings.ssh_username
-                    showUsernameDialog = true
-                },
-            )
+            val currentTerminalSelection = if (defaultTerminalUser.isBlank()) ""
+            else if (terminalUserItems.any { it.first == defaultTerminalUser }) defaultTerminalUser
+            else "__custom__"
 
-            var authType by remember { mutableStateOf(Settings.ssh_auth_type) }
-            PreferenceList(
-                label = stringResource(strings.ssh_auth_type),
-                description = if (authType == "key") stringResource(strings.ssh_auth_key) else stringResource(strings.ssh_auth_password),
-                items = listOf(
-                    "password" to strings.ssh_auth_password.getString(),
-                    "key" to strings.ssh_auth_key.getString(),
-                ),
-                selectedItem = authType,
-                onItemSelected = {
-                    authType = it
-                    Settings.ssh_auth_type = it
-                },
-            )
-
-            if (authType == "password") {
-                SettingsItem(
-                    label = stringResource(strings.ssh_password),
-                    description = if (hasPassword) stringResource(strings.ssh_password_set) else stringResource(strings.ssh_password_not_set),
-                    showSwitch = false,
-                    default = false,
-                    onClick = {
-                        passwordValue = SSHSecureStorage.getPassword()
-                        showPasswordDialog = true
-                    },
-                )
-            } else {
-                SettingsItem(
-                    label = stringResource(strings.ssh_private_key),
-                    description = if (hasPrivateKey) stringResource(strings.ssh_private_key_set) else stringResource(strings.ssh_private_key_not_set),
-                    showSwitch = false,
-                    default = false,
-                    onClick = {
-                        keyValue = SSHSecureStorage.getPrivateKey()
-                        showKeyDialog = true
-                    },
-                )
-
-                SettingsItem(
-                    label = stringResource(strings.ssh_key_passphrase),
-                    description = stringResource(strings.ssh_key_passphrase_desc),
-                    showSwitch = false,
-                    default = false,
-                    onClick = {
-                        passphraseValue = SSHSecureStorage.getPassphrase()
-                        showPassphraseDialog = true
-                    },
-                )
+            val terminalUserDescription = when {
+                defaultTerminalUser.isBlank() -> strings.ask_every_time.getString()
+                defaultTerminalUser == "root" -> strings.root_user.getString()
+                else -> defaultTerminalUser
             }
 
-            var isTestingConnection by remember { mutableStateOf(false) }
+            PreferenceList(
+                label = stringResource(strings.default_terminal_user),
+                description = terminalUserDescription,
+                items = terminalUserItems,
+                selectedItem = currentTerminalSelection,
+                onItemSelected = { selected ->
+                    if (selected == "__custom__") {
+                        customTerminalUserValue = defaultTerminalUser
+                        showCustomTerminalUserDialog = true
+                    } else {
+                        defaultTerminalUser = selected
+                        Settings.droidspaces_terminal_default_user = selected
+                    }
+                },
+            )
+
+            // Storage Default User Dropdown
+            val storageUserItems = mutableListOf(
+                "" to strings.ask_every_time.getString(),
+                "root" to "root (/root)",
+            )
+            containerUsers.filter { !it.isRoot }.forEach { u ->
+                storageUserItems.add(u.username to "${u.username} (${u.homeDir})")
+            }
+            storageUserItems.add("__custom__" to strings.custom_user.getString())
+
+            val currentStorageSelection = if (defaultStorageUser.isBlank()) ""
+            else if (storageUserItems.any { it.first == defaultStorageUser }) defaultStorageUser
+            else "__custom__"
+
+            val storageUserDescription = when {
+                defaultStorageUser.isBlank() -> strings.ask_every_time.getString()
+                defaultStorageUser == "root" -> "root (/root)"
+                else -> defaultStorageUser
+            }
+
+            PreferenceList(
+                label = stringResource(strings.default_storage_user),
+                description = storageUserDescription,
+                items = storageUserItems,
+                selectedItem = currentStorageSelection,
+                onItemSelected = { selected ->
+                    if (selected == "__custom__") {
+                        customStorageUserValue = defaultStorageUser
+                        showCustomStorageUserDialog = true
+                    } else {
+                        defaultStorageUser = selected
+                        Settings.droidspaces_storage_default_user = selected
+                    }
+                },
+            )
+
             SettingsItem(
-                label = stringResource(strings.ssh_test_connection),
-                description = if (isTestingConnection) stringResource(strings.ssh_connecting).format(Settings.ssh_username, Settings.ssh_host, Settings.ssh_port)
-                              else stringResource(strings.ssh_test_connection_desc),
+                label = stringResource(strings.droidspaces_binary_path),
+                description = binaryPath,
+                showSwitch = false,
+                default = false,
+                onClick = { showBinaryPathDialog = true },
+            )
+
+            val statusText = when (containerStatus) {
+                ContainerStatus.RUNNING -> strings.container_running.getString()
+                ContainerStatus.STOPPED -> strings.container_stopped.getString()
+                ContainerStatus.NOT_FOUND -> strings.container_not_found.getString()
+            }
+            SettingsItem(
+                label = stringResource(strings.container_status),
+                description = "$statusText (Root: ${if (isRootAvailable) "Granted" else "Not available"})",
+                showSwitch = false,
+                default = false,
+                onClick = { scope.launch { refreshContainerInfo() } },
+            )
+
+            SettingsItem(
+                label = stringResource(strings.test_container),
+                description = if (isTestingConnection) "Testing connection to container '$containerName'…"
+                else stringResource(strings.test_container_desc),
                 showSwitch = false,
                 default = false,
                 onClick = {
                     if (isTestingConnection) return@SettingsItem
-                    val config = SSHConfig.loadFromSettings()
-                    if (!config.isConfigured()) {
-                        toast(strings.ssh_missing_config)
-                        return@SettingsItem
-                    }
-
                     isTestingConnection = true
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
-                            SSHConnection.testConnection(config)
+                            DroidspacesManager.testContainer(containerName)
                         }
                         isTestingConnection = false
 
-                        val activity = context as? android.app.Activity
                         result.onSuccess { banner ->
                             dialogRes(
                                 activity = activity,
-                                title = strings.ssh_connection_success.getString(),
+                                title = "Droidspaces Connected",
                                 msg = banner,
                             )
                         }.onFailure { err ->
                             dialogRes(
                                 activity = activity,
-                                title = strings.ssh_connection_failed.getString().format(""),
+                                title = "Connection Failed",
+                                msg = err.localizedMessage ?: err.message ?: "Unknown error",
+                            )
+                        }
+                    }
+                },
+            )
+
+            SettingsItem(
+                label = stringResource(strings.install_busybox),
+                description = if (isInstallingBusybox) "Installing bundled BusyBox…"
+                else stringResource(strings.install_busybox_desc),
+                showSwitch = false,
+                default = false,
+                onClick = {
+                    if (isInstallingBusybox) return@SettingsItem
+                    isInstallingBusybox = true
+                    scope.launch {
+                        val result = DroidspacesBinaryInstaller.installBusybox(context)
+                        isInstallingBusybox = false
+                        result.onSuccess {
+                            toast(strings.busybox_installed)
+                        }.onFailure { err ->
+                            dialogRes(
+                                activity = activity,
+                                title = strings.busybox_install_failed.getString(),
                                 msg = err.localizedMessage ?: err.message ?: "Unknown error",
                             )
                         }

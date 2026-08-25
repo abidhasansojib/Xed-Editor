@@ -79,26 +79,84 @@ fun AddProjectSheet(
                 },
             )
 
-            val is11Plus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-            val isManager = is11Plus && Environment.isExternalStorageManager()
-            val legacyPermission =
-                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) !=
-                    PackageManager.PERMISSION_GRANTED ||
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
-                        PackageManager.PERMISSION_GRANTED
+            var showUserPicker by remember { mutableStateOf(false) }
+            var showContainerFileManager by remember { mutableStateOf(false) }
+            var containerManagerInitialPath by remember { mutableStateOf("/root") }
+            val containerName = remember { Settings.droidspaces_container_name.ifBlank { "Ubuntu" } }
 
-            val storage = Environment.getExternalStorageDirectory()
-            if ((isManager || (!is11Plus && legacyPermission)) && storage.canWrite() && storage.canRead()) {
-                AddDialogItem(
-                    icon = Icon.ResourceIcon(drawables.android),
-                    title = stringResource(strings.internal_storage),
-                    description = stringResource(strings.open_internal_storage),
-                    onClick = {
-                        viewModel.addFileTreeTab(FileWrapper(storage))
-                        onDismiss()
+            AddDialogItem(
+                icon = Icon.ResourceIcon(drawables.android),
+                title = stringResource(strings.container_storage),
+                description = stringResource(strings.open_container_storage),
+                onClick = {
+                    lifecycleScope.launch {
+                        val rootOk = DroidspacesManager.checkRootAccess()
+                        if (!rootOk) {
+                            com.rk.utils.dialogRes(
+                                activity = activity,
+                                title = strings.root_access_required.getString(),
+                                msg = strings.root_access_required_desc.getString(),
+                            )
+                            return@launch
+                        }
+
+                        val defaultUser = Settings.droidspaces_storage_default_user.trim()
+                        if (defaultUser.isNotEmpty()) {
+                            val home = DroidspacesManager.getUserHome(containerName, defaultUser)
+                            containerManagerInitialPath = home
+                            showContainerFileManager = true
+                        } else {
+                            val users = DroidspacesManager.getContainerUsers(containerName, useCache = false)
+                            if (users.size <= 1) {
+                                val user = users.firstOrNull()
+                                containerManagerInitialPath = user?.homeDir ?: "/root"
+                                showContainerFileManager = true
+                            } else {
+                                showUserPicker = true
+                            }
+                        }
+                    }
+                },
+            )
+
+            if (showUserPicker) {
+                com.rk.droidspaces.SelectUserSheet(
+                    containerName = containerName,
+                    title = stringResource(strings.select_storage_user),
+                    onDismiss = { showUserPicker = false },
+                    onUserSelected = { username, rememberAsDefault ->
+                        if (rememberAsDefault) {
+                            Settings.droidspaces_storage_default_user = username
+                        }
+                        lifecycleScope.launch {
+                            val home = DroidspacesManager.getUserHome(containerName, username)
+                            containerManagerInitialPath = home
+                            showContainerFileManager = true
+                        }
                     },
                 )
             }
+
+            if (showContainerFileManager) {
+                com.rk.droidspaces.ContainerFileManagerSheet(
+                    containerName = containerName,
+                    initialPath = containerManagerInitialPath,
+                    onDismiss = {
+                        showContainerFileManager = false
+                        onDismiss()
+                    },
+                    onOpenInDrawer = { fileObj ->
+                        lifecycleScope.launch {
+                            viewModel.addFileTreeTab(fileObj, save = true)
+                            onDismiss()
+                        }
+                    },
+                )
+            }
+
+            val is11Plus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            val isManager = is11Plus && Environment.isExternalStorageManager()
+            val storage = Environment.getExternalStorageDirectory()
 
             if (isManager) {
                 val storageManager = context.getSystemService(StorageManager::class.java)

@@ -9,7 +9,6 @@ import com.blankj.utilcode.util.ClipboardUtils
 import com.blankj.utilcode.util.KeyboardUtils
 import com.rk.activities.terminal.Terminal
 import com.rk.settings.Settings
-import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
 import com.rk.terminal.virtualkeys.SpecialButton
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
@@ -34,13 +33,6 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
     override fun onPasteTextFromClipboard(session: TerminalSession?) {
         val clip = ClipboardUtils.getText().toString()
         if (clip.isNotBlank()) {
-            if (session != null) {
-                val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
-                if (bridge != null && bridge.isConnected) {
-                    bridge.write(clip)
-                    return
-                }
-            }
             val activity = Terminal.instance ?: return
             val emulator = activity.terminalView.get()?.mEmulator ?: return
             emulator.paste(clip)
@@ -133,36 +125,6 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
     override fun copyModeChanged(copyMode: Boolean) {}
 
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
-        val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
-        if (bridge != null) {
-            if (!bridge.isConnected && keyCode == KeyEvent.KEYCODE_ENTER) {
-                val activity = Terminal.instance
-                val emulator = activity?.terminalView?.get()?.mEmulator
-                bridge.reconnect(emulator?.mColumns ?: 80, emulator?.mRows ?: 24)
-                return true
-            }
-            val escapeSeq =
-                when (keyCode) {
-                    KeyEvent.KEYCODE_ENTER -> "\r"
-                    KeyEvent.KEYCODE_DEL -> "\u007F"
-                    KeyEvent.KEYCODE_TAB -> "\t"
-                    KeyEvent.KEYCODE_ESCAPE -> "\u001B"
-                    KeyEvent.KEYCODE_DPAD_UP -> "\u001B[A"
-                    KeyEvent.KEYCODE_DPAD_DOWN -> "\u001B[B"
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> "\u001B[C"
-                    KeyEvent.KEYCODE_DPAD_LEFT -> "\u001B[D"
-                    KeyEvent.KEYCODE_MOVE_HOME -> "\u001B[H"
-                    KeyEvent.KEYCODE_MOVE_END -> "\u001B[F"
-                    KeyEvent.KEYCODE_PAGE_UP -> "\u001B[5~"
-                    KeyEvent.KEYCODE_PAGE_DOWN -> "\u001B[6~"
-                    KeyEvent.KEYCODE_FORWARD_DEL -> "\u001B[3~"
-                    else -> null
-                }
-            if (escapeSeq != null) {
-                bridge.write(escapeSeq)
-                return true
-            }
-        }
         return false
     }
 
@@ -195,34 +157,6 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
     }
 
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
-        val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
-        if (bridge != null) {
-            if (!bridge.isConnected) {
-                if (codePoint == 10 || codePoint == 13) {
-                    val activity = Terminal.instance
-                    val emulator = activity?.terminalView?.get()?.mEmulator
-                    bridge.reconnect(emulator?.mColumns ?: 80, emulator?.mRows ?: 24)
-                    return true
-                }
-                return false
-            }
-            if (ctrlDown) {
-                val ctrlByte =
-                    when (codePoint) {
-                        in 97..122 -> (codePoint - 96).toByte()
-                        in 65..90 -> (codePoint - 64).toByte()
-                        32 -> 0.toByte()
-                        else -> null
-                    }
-                if (ctrlByte != null) {
-                    bridge.write(byteArrayOf(ctrlByte))
-                    return true
-                }
-            }
-            val chars = Character.toChars(codePoint)
-            bridge.write(String(chars))
-            return true
-        }
         return false
     }
 

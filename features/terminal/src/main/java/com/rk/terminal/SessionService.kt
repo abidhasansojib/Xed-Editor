@@ -19,7 +19,7 @@ import com.rk.resources.getString
 import com.rk.resources.strings
 
 /**
- * Foreground Service for SSH Terminal sessions.
+ * Foreground Service for Droidspaces Terminal sessions.
  * Keeps CPU, Wi-Fi, and network sockets active via PARTIAL_WAKE_LOCK when app is minimized,
  * and displays an ongoing notification.
  */
@@ -60,7 +60,7 @@ class SessionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                SSHTerminalSessionManager.terminateAll()
+                DroidspacesTerminalSessionManager.terminateAll()
                 Terminal.instance?.let { act ->
                     act.runOnUiThread {
                         act.finishAndRemoveTask()
@@ -99,7 +99,7 @@ class SessionService : Service() {
                 "Terminal Service",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Keeps SSH terminal active in the background"
+                description = "Keeps Droidspaces terminal active in the background"
                 setShowBadge(false)
             }
             notificationManager.createNotificationChannel(channel)
@@ -127,12 +127,12 @@ class SessionService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
-        val count = SSHTerminalSessionManager.sessionList.value.size
+        val count = DroidspacesTerminalSessionManager.sessionList.value.size
         val countText = if (count <= 1) "1 session running" else "$count sessions running"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Xed Terminal")
-            .setContentText("SSH Terminal active ($countText)")
+            .setContentText("Droidspaces Terminal active ($countText)")
             .setSmallIcon(drawables.terminal)
             .setContentIntent(openPendingIntent)
             .addAction(

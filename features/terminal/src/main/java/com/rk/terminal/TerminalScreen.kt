@@ -2,8 +2,6 @@ package com.rk.terminal
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Typeface
-import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +27,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -62,25 +61,21 @@ import com.rk.activities.settings.SettingsActivity
 import com.rk.activities.settings.SettingsRoutes
 import com.rk.activities.terminal.Terminal
 import com.rk.components.SingleInputDialog
+import com.rk.droidspaces.DroidspacesConstants
+import com.rk.droidspaces.DroidspacesManager
+import com.rk.droidspaces.SelectUserSheet
 import com.rk.editor.FontCache
 import com.rk.resources.getString
 import com.rk.resources.strings
 import com.rk.settings.Settings
-import com.rk.terminal.ssh.SSHConfig
-import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
 import com.rk.terminal.virtualkeys.VirtualKeysConstants
 import com.rk.terminal.virtualkeys.VirtualKeysInfo
 import com.rk.terminal.virtualkeys.VirtualKeysListener
 import com.rk.terminal.virtualkeys.VirtualKeysView
-import com.rk.utils.dpToPx
-import com.termux.terminal.TerminalColors
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import java.io.File
 import java.lang.ref.WeakReference
-import java.util.Properties
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,18 +84,85 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    val sessionList by SSHTerminalSessionManager.sessionList.collectAsState()
-    val currentSessionId by SSHTerminalSessionManager.currentSessionId.collectAsState()
+    val sessionList by DroidspacesTerminalSessionManager.sessionList.collectAsState()
+    val currentSessionId by DroidspacesTerminalSessionManager.currentSessionId.collectAsState()
 
     var showRenameDialog by remember { mutableStateOf(false) }
     var sessionToRename by remember { mutableStateOf("") }
     var renameValue by remember { mutableStateOf("") }
     var renameError by remember { mutableStateOf<String?>(null) }
 
+    var showUserPicker by remember { mutableStateOf(false) }
+    var isCreatingNewTab by remember { mutableStateOf(false) }
+
+    val containerName = remember {
+        Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
+    }
+
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val surfaceColor = MaterialTheme.colorScheme.surface.toArgb()
 
     val drawerWidth = 320.dp
+
+    fun launchUserSelectionOrSession(isNewTab: Boolean) {
+        val defaultUser = Settings.droidspaces_terminal_default_user.trim()
+        if (defaultUser.isNotEmpty()) {
+            val client = TerminalBackEnd()
+            if (isNewTab) {
+                DroidspacesTerminalSessionManager.createNewTabSession(
+                    context = context,
+                    client = client,
+                    containerName = containerName,
+                    user = defaultUser,
+                )
+                terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
+            } else {
+                DroidspacesTerminalSessionManager.getOrCreateSession(
+                    context = context,
+                    client = client,
+                    containerName = containerName,
+                    user = defaultUser,
+                    initialCommand = initialCommand,
+                )
+                terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
+            }
+        } else {
+            scope.launch {
+                val users = DroidspacesManager.getContainerUsers(containerName, useCache = false)
+                if (users.size <= 1) {
+                    val singleUser = users.firstOrNull()?.username ?: "root"
+                    val client = TerminalBackEnd()
+                    if (isNewTab) {
+                        DroidspacesTerminalSessionManager.createNewTabSession(
+                            context = context,
+                            client = client,
+                            containerName = containerName,
+                            user = singleUser,
+                        )
+                        terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
+                    } else {
+                        DroidspacesTerminalSessionManager.getOrCreateSession(
+                            context = context,
+                            client = client,
+                            containerName = containerName,
+                            user = singleUser,
+                            initialCommand = initialCommand,
+                        )
+                        terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
+                    }
+                } else {
+                    isCreatingNewTab = isNewTab
+                    showUserPicker = true
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!DroidspacesTerminalSessionManager.hasActiveSessions()) {
+            launchUserSelectionOrSession(isNewTab = false)
+        }
+    }
 
     DisposableEffect(Unit) {
         val window = (context as? Activity)?.window
@@ -108,6 +170,53 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
+    }
+
+    if (showUserPicker) {
+        SelectUserSheet(
+            containerName = containerName,
+            title = stringResource(strings.select_terminal_user),
+            onDismiss = {
+                showUserPicker = false
+                if (!DroidspacesTerminalSessionManager.hasActiveSessions() && !isCreatingNewTab) {
+                    // If dismissed without selecting and no sessions exist, fallback to root
+                    val client = TerminalBackEnd()
+                    DroidspacesTerminalSessionManager.getOrCreateSession(
+                        context = context,
+                        client = client,
+                        containerName = containerName,
+                        user = "root",
+                        initialCommand = initialCommand,
+                    )
+                    terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
+                }
+            },
+            onUserSelected = { username, rememberAsDefault ->
+                showUserPicker = false
+                if (rememberAsDefault) {
+                    Settings.droidspaces_terminal_default_user = username
+                }
+                val client = TerminalBackEnd()
+                if (isCreatingNewTab) {
+                    DroidspacesTerminalSessionManager.createNewTabSession(
+                        context = context,
+                        client = client,
+                        containerName = containerName,
+                        user = username,
+                    )
+                    terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
+                } else {
+                    DroidspacesTerminalSessionManager.getOrCreateSession(
+                        context = context,
+                        client = client,
+                        containerName = containerName,
+                        user = username,
+                        initialCommand = initialCommand,
+                    )
+                    terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
+                }
+            },
+        )
     }
 
     if (showRenameDialog) {
@@ -127,7 +236,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
             },
             onConfirm = {
                 if (renameError == null && renameValue.isNotBlank() && renameValue != sessionToRename) {
-                    SSHTerminalSessionManager.renameSession(sessionToRename, renameValue)
+                    DroidspacesTerminalSessionManager.renameSession(sessionToRename, renameValue)
                 }
             },
             onFinish = { showRenameDialog = false },
@@ -144,7 +253,9 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
             ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -152,9 +263,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                         Row(horizontalArrangement = Arrangement.End) {
                             IconButton(
                                 onClick = {
-                                    val client = TerminalBackEnd()
-                                    val session = SSHTerminalSessionManager.createNewTabSession(context, client)
-                                    terminalActivity.changeSession(SSHTerminalSessionManager.currentSessionId.value)
+                                    launchUserSelectionOrSession(isNewTab = true)
                                     scope.launch { drawerState.close() }
                                 },
                             ) {
@@ -222,9 +331,9 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                                         neighborSession?.let { terminalActivity.changeSession(it) }
                                                     }
 
-                                                    SSHTerminalSessionManager.terminateSession(sessionId)
+                                                    DroidspacesTerminalSessionManager.terminateSession(sessionId)
 
-                                                    if (SSHTerminalSessionManager.sessionList.value.isEmpty()) {
+                                                    if (DroidspacesTerminalSessionManager.sessionList.value.isEmpty()) {
                                                         terminalActivity.finish()
                                                     }
                                                 },
@@ -249,7 +358,12 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(text = currentSessionId.ifEmpty { "SSH Terminal" }) },
+                    title = {
+                        Text(
+                            text = if (currentSessionId.isNotEmpty()) "$containerName: $currentSessionId"
+                            else stringResource(strings.droidspaces_terminal),
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(imageVector = Icons.Default.Menu, contentDescription = "Menu")
@@ -258,23 +372,10 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                     actions = {
                         IconButton(
                             onClick = {
-                                val client = TerminalBackEnd()
-                                SSHTerminalSessionManager.createNewTabSession(context, client)
-                                terminalActivity.changeSession(SSHTerminalSessionManager.currentSessionId.value)
+                                launchUserSelectionOrSession(isNewTab = true)
                             },
                         ) {
                             Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(strings.add_session))
-                        }
-
-                        IconButton(
-                            onClick = {
-                                val curId = SSHTerminalSessionManager.currentSessionId.value
-                                val bridge = SSHTerminalBridgeRegistry.getBridge(curId)
-                                val view = terminalActivity.terminalView.get()
-                                bridge?.reconnect(view?.mEmulator?.mColumns ?: 80, view?.mEmulator?.mRows ?: 24)
-                            },
-                        ) {
-                            Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reconnect")
                         }
 
                         IconButton(
@@ -305,7 +406,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                         factory = { ctx ->
                             TerminalView(ctx, null).apply {
                                 val client = TerminalBackEnd()
-                                val session = SSHTerminalSessionManager.getOrCreateSession(
+                                val session = DroidspacesTerminalSessionManager.getOrCreateSession(
                                     context = ctx,
                                     client = client,
                                     initialCommand = initialCommand,
@@ -334,7 +435,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                             }
                         },
                         update = { view ->
-                            val currentSession = SSHTerminalSessionManager.getCurrentSession()
+                            val currentSession = DroidspacesTerminalSessionManager.getCurrentSession()
                             if (currentSession != null && view.mTermSession != currentSession) {
                                 view.attachSession(currentSession)
                             }
@@ -349,7 +450,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                     factory = { ctx ->
                         VirtualKeysView(ctx, null).apply {
                             val view = terminalActivity.terminalView.get()
-                            val session = view?.mTermSession ?: SSHTerminalSessionManager.getCurrentSession()
+                            val session = view?.mTermSession ?: DroidspacesTerminalSessionManager.getCurrentSession()
                             if (session != null) {
                                 virtualKeysViewClient = VirtualKeysListener(session)
                             }
@@ -376,7 +477,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                     },
                     update = { vkv ->
                         val view = terminalActivity.terminalView.get()
-                        val session = view?.mTermSession ?: SSHTerminalSessionManager.getCurrentSession()
+                        val session = view?.mTermSession ?: DroidspacesTerminalSessionManager.getCurrentSession()
                         if (session != null) {
                             vkv.virtualKeysViewClient = VirtualKeysListener(session)
                         }

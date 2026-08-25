@@ -10,11 +10,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.rk.settings.Settings
-import com.rk.terminal.SSHTerminalSessionManager
+import com.rk.terminal.DroidspacesTerminalSessionManager
 import com.rk.terminal.SessionService
 import com.rk.terminal.TerminalBackEnd
 import com.rk.terminal.TerminalScreen
-import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
 import com.rk.terminal.virtualkeys.VirtualKeysListener
 import com.rk.terminal.virtualkeys.VirtualKeysView
 import com.rk.theme.XedTheme
@@ -55,16 +54,11 @@ class Terminal : ComponentActivity() {
     fun changeSession(sessionId: String) {
         val view = terminalView.get() ?: return
         val client = TerminalBackEnd()
-        val session = SSHTerminalSessionManager.getOrCreateSession(this, client, sessionId)
+        val session = DroidspacesTerminalSessionManager.getOrCreateSession(this, client, sessionId)
 
         session.updateTerminalSessionClient(client)
         view.attachSession(session)
         view.setTerminalViewClient(client)
-
-        val bridge = SSHTerminalBridgeRegistry.getBridge(sessionId)
-        if (bridge != null && !bridge.isConnected) {
-            bridge.start(view.mEmulator?.mColumns ?: 80, view.mEmulator?.mRows ?: 24)
-        }
 
         view.post {
             view.keepScreenOn = true
@@ -76,14 +70,14 @@ class Terminal : ComponentActivity() {
             virtualKeysViewClient = VirtualKeysListener(view.mTermSession)
         }
 
-        SSHTerminalSessionManager.switchSession(sessionId)
+        DroidspacesTerminalSessionManager.switchSession(sessionId)
         SessionService.update(this)
     }
 
     override fun onResume() {
         super.onResume()
         terminalView.get()?.apply {
-            val session = SSHTerminalSessionManager.getCurrentSession()
+            val session = DroidspacesTerminalSessionManager.getCurrentSession()
             if (session != null && mTermSession != session) {
                 attachSession(session)
             }
@@ -95,7 +89,7 @@ class Terminal : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         if (Settings.terminate_sessions_on_exit) {
-            SSHTerminalSessionManager.terminateAll()
+            DroidspacesTerminalSessionManager.terminateAll()
         }
         if (instance == this) {
             instance = null
