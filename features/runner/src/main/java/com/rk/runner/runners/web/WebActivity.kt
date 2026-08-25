@@ -6,6 +6,7 @@ import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -35,13 +36,20 @@ abstract class WebActivity : ComponentActivity() {
     fun setupWebView(webView: WebView) {
         val webSettings = webView.settings
         webSettings.javaScriptEnabled = true
-        webSettings.databaseEnabled = true
         webSettings.domStorageEnabled = true
+        webSettings.databaseEnabled = true
+        webSettings.allowFileAccess = true
+        webSettings.allowContentAccess = true
         webSettings.javaScriptCanOpenWindowsAutomatically = true
         webSettings.loadWithOverviewMode = true
         webSettings.useWideViewPort = true
+        webSettings.defaultTextEncodingName = "UTF-8"
+        webSettings.cacheMode = WebSettings.LOAD_DEFAULT
         webSettings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        webSettings.mediaPlaybackRequiresUserGesture = false
+
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        webView.webViewClient = WebViewClient()
         webView.webChromeClient = WebChromeClient()
     }
 
