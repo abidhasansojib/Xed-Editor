@@ -195,8 +195,22 @@ object Settings {
         CachedPreference("excluded_files_search", DEFAULT_EXCLUDED_FILES_SEARCH.joinToString("\n"))
     var excluded_files_drawer by
         CachedPreference("excluded_files_drawer", DEFAULT_EXCLUDED_FILES_DRAWER.joinToString("\n"))
-    var file_mask by CachedPreference("file_mask", "")
     var formatters by CachedPreference("formatters", "")
+
+    // Terminal and SSH settings
+    var is_terminal_font_asset by CachedPreference("is_terminal_font_asset", false)
+    var terminal_clipboard_keybindings by CachedPreference("terminal_clipboard_keybindings", true)
+    var terminal_font_size by CachedPreference("terminal_font_size", 14)
+    var terminal_scrollback_buffer by CachedPreference("terminal_scrollback_buffer", 10000)
+    var terminal_font_path by CachedPreference("terminal_font_path", "")
+    var terminal_cursor_style by CachedPreference("terminal_cursor_style", "block")
+    var terminal_extra_keys by CachedPreference("terminal_extra_keys", DEFAULT_TERMINAL_EXTRA_KEYS)
+    var use_ssh_terminal by CachedPreference("use_ssh_terminal", true)
+    var ssh_port by CachedPreference("ssh_port", 22)
+    var ssh_host by CachedPreference("ssh_host", "")
+    var ssh_username by CachedPreference("ssh_username", "")
+    var ssh_auth_type by CachedPreference("ssh_auth_type", "password")
+    var ssh_key_path by CachedPreference("ssh_key_path", "")
 
     // Long settings
     var last_update_check_timestamp by CachedPreference("last_update", 0L)
@@ -528,3 +542,6 @@ open class CachedPreference<T>(val key: String, val defaultValue: T) : ReadWrite
         state = value
     }
 }
+
+private const val DEFAULT_TERMINAL_EXTRA_KEYS =
+    "[[\"ESC\",\"/\",\"-\",\"HOME\",\"UP\",\"END\",\"PGUP\"],[\"TAB\",\"CTRL\",\"ALT\",\"LEFT\",\"DOWN\",\"RIGHT\",\"PGDN\"]]"

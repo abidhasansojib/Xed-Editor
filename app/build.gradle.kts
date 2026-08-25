@@ -123,4 +123,5 @@ dependencies {
     implementation(project(":core:resources"))
     implementation(libs.androidx.appcompat)
     implementation(project(":features:runner"))
+    implementation(project(":features:terminal"))
 }

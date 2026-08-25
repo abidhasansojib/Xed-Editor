@@ -44,4 +44,10 @@ sealed class SettingsRoutes(val route: String) {
     data object LspInitializationOptions : SettingsRoutes("lsp_initialization_options")
 
     data object LspServerLogs : SettingsRoutes("lsp_server_logs")
+
+    data object TerminalSettings : SettingsRoutes("terminal_settings")
+
+    data object TerminalExtraKeys : SettingsRoutes("terminal_extra_keys")
+
+    data object TerminalFontScreen : SettingsRoutes("terminal_font_screen")
 }

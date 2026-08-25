@@ -96,17 +96,44 @@ fun WelcomeScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            Button(onClick = { scope.launch { drawerState.open() } }) {
-                Icon(
-                    imageVector = Icons.Filled.Menu,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = stringResource(strings.open_file),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+            val context = LocalContext.current
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(onClick = { scope.launch { drawerState.open() } }) {
+                    Icon(
+                        imageVector = Icons.Filled.Menu,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(strings.open_file),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        val activity = context as? android.app.Activity
+                        activity?.let {
+                            com.rk.commands.CommandProvider.getForId("global.terminal")
+                                ?.performCommand(com.rk.commands.ActionContext(it))
+                        }
+                    },
+                ) {
+                    Icon(
+                        painter = painterResource(drawables.terminal),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(strings.terminal),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
     }

@@ -238,6 +238,15 @@
 
 # JVM Libraries Reflection & Compatibility Rules
 
+# JSch
+-keep class com.jcraft.jsch.** { *; }
+-dontwarn com.jcraft.jsch.**
+
+# Termux Terminal
+-keep class com.termux.** { *; }
+-dontwarn com.termux.**
+-keep class com.rk.terminal.** { *; }
+
 # LSP4J
 -keep class org.eclipse.lsp4j.** { *; }
 -dontwarn org.eclipse.lsp4j.**

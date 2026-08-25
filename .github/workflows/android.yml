@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - copy
     paths-ignore:
       - "**/*.md"
   workflow_dispatch:

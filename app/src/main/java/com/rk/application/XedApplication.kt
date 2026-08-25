@@ -10,6 +10,7 @@ class XedApplication : App() {
 
         // Register pluggable features
         FeatureRegistry.register(RunnerFeature())
+        FeatureRegistry.register(TerminalFeature())
 
         // Initialize features
         FeatureRegistry.initFeatures(this)

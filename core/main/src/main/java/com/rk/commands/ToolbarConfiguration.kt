@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.update
 
 object ToolbarConfiguration {
     const val DEFAULT_EDITOR_TOOLBAR_COMMANDS =
-        "editor.undo|editor.redo|editor.save|editor.run|global.new_file|editor.editable|editor.search|editor.refresh|global.settings"
+        "editor.undo|editor.redo|editor.save|editor.run|global.terminal|global.new_file|editor.editable|editor.search|editor.refresh|global.settings"
 
     val editorCommands: List<Command>
         get() = Settings.action_items.split("|").mapNotNull { CommandProvider.getForId(it) }
