@@ -118,6 +118,10 @@ object SSHSecureStorage {
     fun getPassword(): String = decrypt(prefs?.getString(KEY_SSH_PASSWORD, null))
 
     fun savePassword(password: String) {
+        if (password.isEmpty()) {
+            prefs?.edit()?.remove(KEY_SSH_PASSWORD)?.apply()
+            return
+        }
         val encrypted = encrypt(password)
         prefs?.edit()?.putString(KEY_SSH_PASSWORD, encrypted)?.apply()
     }
@@ -129,7 +133,11 @@ object SSHSecureStorage {
     fun getPrivateKey(): String = decrypt(prefs?.getString(KEY_SSH_PRIVATE_KEY, null))
 
     fun savePrivateKey(privateKey: String) {
-        val encrypted = encrypt(privateKey)
+        if (privateKey.isBlank()) {
+            prefs?.edit()?.remove(KEY_SSH_PRIVATE_KEY)?.apply()
+            return
+        }
+        val encrypted = encrypt(privateKey.trim())
         prefs?.edit()?.putString(KEY_SSH_PRIVATE_KEY, encrypted)?.apply()
     }
 
@@ -140,6 +148,10 @@ object SSHSecureStorage {
     fun getPassphrase(): String = decrypt(prefs?.getString(KEY_SSH_KEY_PASSPHRASE, null))
 
     fun savePassphrase(passphrase: String) {
+        if (passphrase.isEmpty()) {
+            prefs?.edit()?.remove(KEY_SSH_KEY_PASSPHRASE)?.apply()
+            return
+        }
         val encrypted = encrypt(passphrase)
         prefs?.edit()?.putString(KEY_SSH_KEY_PASSPHRASE, encrypted)?.apply()
     }

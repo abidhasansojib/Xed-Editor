@@ -78,7 +78,7 @@ class Terminal : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         if (Settings.terminate_sessions_on_exit) {
-            SSHTerminalSessionManager.terminateAllSessions()
+            SSHTerminalSessionManager.terminateAll()
         }
         if (instance == this) {
             instance = null

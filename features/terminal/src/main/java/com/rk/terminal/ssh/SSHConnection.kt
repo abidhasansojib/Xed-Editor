@@ -1,6 +1,5 @@
 package com.rk.terminal.ssh
 
-import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
@@ -9,19 +8,88 @@ import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.concurrent.thread
+
+/**
+ * Thread-safe queue-based InputStream for JSch ChannelShell.
+ * Holds typed characters indefinitely without timing out, throwing "read end dead",
+ * or sending premature EOF to remote bash shell.
+ */
+class SSHQueueInputStream : InputStream() {
+    private val queue = LinkedBlockingQueue<ByteArray>()
+    private var currentBuffer: ByteArray? = null
+    private var currentPos = 0
+    @Volatile private var isClosed = false
+
+    fun push(data: ByteArray, offset: Int = 0, count: Int = data.size) {
+        if (isClosed || count <= 0) return
+        val copy = data.copyOfRange(offset, offset + count)
+        queue.offer(copy)
+    }
+
+    fun push(text: String) {
+        push(text.toByteArray(StandardCharsets.UTF_8))
+    }
+
+    override fun read(): Int {
+        val b = ByteArray(1)
+        val r = read(b, 0, 1)
+        return if (r <= 0) -1 else (b[0].toInt() and 0xFF)
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (isClosed) return -1
+        if (len == 0) return 0
+
+        while (currentBuffer == null || currentPos >= currentBuffer!!.size) {
+            if (isClosed) return -1
+            try {
+                val next = queue.poll(300, TimeUnit.MILLISECONDS)
+                if (next != null) {
+                    if (next.isEmpty()) {
+                        // EOF marker
+                        isClosed = true
+                        return -1
+                    }
+                    currentBuffer = next
+                    currentPos = 0
+                    break
+                }
+            } catch (_: InterruptedException) {
+                if (isClosed) return -1
+            }
+        }
+
+        val buf = currentBuffer ?: return -1
+        val available = buf.size - currentPos
+        val bytesToCopy = minOf(len, available)
+        System.arraycopy(buf, currentPos, b, off, bytesToCopy)
+        currentPos += bytesToCopy
+        if (currentPos >= buf.size) {
+            currentBuffer = null
+            currentPos = 0
+        }
+        return bytesToCopy
+    }
+
+    override fun close() {
+        isClosed = true
+        queue.clear()
+        queue.offer(ByteArray(0))
+    }
+}
 
 /**
  * Manages an active SSH connection and interactive PTY shell channel using JSch.
- * Writes directly to ChannelShell's outputStream without blocking or premature EOF.
+ * Uses an unbounded non-blocking queue stream to prevent premature EOF and session disconnection.
  */
 class SSHConnection(private val config: SSHConfig) {
     private var jschSession: Session? = null
     private var shellChannel: ChannelShell? = null
-    private var outStream: OutputStream? = null
+    private var sshInputQueue: SSHQueueInputStream? = null
     private val isConnectedFlag = AtomicBoolean(false)
-    private var readerThread: Thread? = null
 
     val isConnected: Boolean
         get() = isConnectedFlag.get() && (shellChannel?.isConnected == true)
@@ -88,11 +156,9 @@ class SSHConnection(private val config: SSHConfig) {
             session.setConfig("TCPKeepAlive", "yes")
             session.setConfig("KeepAlive", "yes")
 
-            // Set socket read timeout to 0 (infinite) for interactive sessions
+            // Keep connection continuous
             session.timeout = 0
-
-            // Send SSH keepalive packets every 10 seconds to keep the connection continuous
-            session.serverAliveInterval = 10000
+            session.serverAliveInterval = 15000
             session.serverAliveCountMax = 6
 
             session.connect(20000)
@@ -105,43 +171,33 @@ class SSHConnection(private val config: SSHConfig) {
             channel.setPtyType("xterm-256color")
             channel.setPtySize(safeCols, safeRows, width, height)
 
-            val inStream: InputStream = channel.inputStream
-            val out = channel.outputStream
-            outStream = out
+            val inputQueue = SSHQueueInputStream()
+            sshInputQueue = inputQueue
+            channel.setInputStream(inputQueue, false)
+
+            channel.setOutputStream(object : OutputStream() {
+                override fun write(b: Int) {
+                    onData(byteArrayOf(b.toByte()), 1)
+                }
+                override fun write(b: ByteArray, off: Int, len: Int) {
+                    if (len > 0) {
+                        val copy = b.copyOfRange(off, off + len)
+                        onData(copy, len)
+                    }
+                }
+                override fun flush() {}
+                override fun close() {
+                    if (isConnectedFlag.get()) {
+                        isConnectedFlag.set(false)
+                        cleanup()
+                        onDisconnect(null)
+                    }
+                }
+            }, false)
 
             channel.connect(20000)
             shellChannel = channel
             isConnectedFlag.set(true)
-
-            readerThread =
-                thread(name = "SSH-Reader-${config.host}", isDaemon = true) {
-                    val buffer = ByteArray(4096)
-                    var disconnectReason: String? = null
-                    try {
-                        while (isConnectedFlag.get() && channel.isConnected) {
-                            try {
-                                val read = inStream.read(buffer)
-                                if (read == -1) break
-                                if (read > 0) {
-                                    val chunk = buffer.copyOf(read)
-                                    onData(chunk, read)
-                                }
-                            } catch (_: java.net.SocketTimeoutException) {
-                                if (!isConnectedFlag.get() || !channel.isConnected) break
-                            }
-                        }
-                    } catch (e: Exception) {
-                        if (isConnectedFlag.get()) {
-                            disconnectReason = e.message ?: "Connection reset"
-                        }
-                    } finally {
-                        if (isConnectedFlag.get()) {
-                            isConnectedFlag.set(false)
-                            cleanup()
-                            onDisconnect(disconnectReason)
-                        }
-                    }
-                }
         } catch (e: Exception) {
             isConnectedFlag.set(false)
             cleanup()
@@ -150,14 +206,11 @@ class SSHConnection(private val config: SSHConfig) {
     }
 
     fun write(data: ByteArray, offset: Int = 0, count: Int = data.size) {
-        try {
-            outStream?.write(data, offset, count)
-            outStream?.flush()
-        } catch (_: Exception) {}
+        sshInputQueue?.push(data, offset, count)
     }
 
     fun write(text: String) {
-        write(text.toByteArray(StandardCharsets.UTF_8))
+        sshInputQueue?.push(text)
     }
 
     fun resize(cols: Int, rows: Int, width: Int = 0, height: Int = 0) {
@@ -176,9 +229,9 @@ class SSHConnection(private val config: SSHConfig) {
 
     private fun cleanup() {
         try {
-            outStream?.close()
+            sshInputQueue?.close()
         } catch (_: Exception) {}
-        outStream = null
+        sshInputQueue = null
 
         try {
             shellChannel?.disconnect()
@@ -199,7 +252,6 @@ class SSHConnection(private val config: SSHConfig) {
                 }
 
                 var session: Session? = null
-                var channel: ChannelExec? = null
                 try {
                     val jsch = JSch()
 
@@ -247,20 +299,11 @@ class SSHConnection(private val config: SSHConfig) {
                     session.timeout = 10000
                     session.connect(10000)
 
-                    channel = session.openChannel("exec") as ChannelExec
-                    channel.setCommand("uname -a || echo ok")
-                    channel.connect(10000)
-
-                    val output = channel.inputStream.bufferedReader().use { it.readText().trim() }
-                    val banner = if (output.isNotBlank()) output.take(80) else "Connected"
-
-                    Result.success("Success: $banner")
+                    val serverVersion = session.serverVersion ?: "SSH-2.0"
+                    Result.success("Connected successfully to ${config.host} ($serverVersion)")
                 } catch (e: Exception) {
                     Result.failure(e)
                 } finally {
-                    try {
-                        channel?.disconnect()
-                    } catch (_: Exception) {}
                     try {
                         session?.disconnect()
                     } catch (_: Exception) {}

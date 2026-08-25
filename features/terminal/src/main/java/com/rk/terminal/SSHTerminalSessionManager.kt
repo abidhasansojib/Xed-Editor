@@ -80,6 +80,17 @@ object SSHTerminalSessionManager {
             initialCommand = initialCommand,
         )
 
+        // Set custom writer so typing from soft keyboard and virtual keys forwards to SSH!
+        session.setCustomWriter(object : TerminalSession.TerminalSessionWriter {
+            override fun write(data: ByteArray, offset: Int, count: Int) {
+                bridge.write(data, offset, count)
+            }
+
+            override fun onResize(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
+                bridge.resize(columns, rows, cellWidthPixels, cellHeightPixels)
+            }
+        })
+
         bridges[id] = bridge
         SSHTerminalBridgeRegistry.register(id, bridge)
         sessions[id] = session
@@ -120,6 +131,16 @@ object SSHTerminalSessionManager {
             initialCommand = initialCommand,
         )
 
+        session.setCustomWriter(object : TerminalSession.TerminalSessionWriter {
+            override fun write(data: ByteArray, offset: Int, count: Int) {
+                bridge.write(data, offset, count)
+            }
+
+            override fun onResize(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
+                bridge.resize(columns, rows, cellWidthPixels, cellHeightPixels)
+            }
+        })
+
         bridges[newId] = bridge
         SSHTerminalBridgeRegistry.register(newId, bridge)
         sessions[newId] = session
@@ -142,14 +163,14 @@ object SSHTerminalSessionManager {
     }
 
     fun renameSession(oldId: String, newId: String): Boolean {
-        if (newId.isBlank() || sessions.containsKey(newId)) return false
+        if (oldId == newId || newId.isBlank() || sessions.containsKey(newId)) return false
         val session = sessions.remove(oldId) ?: return false
         val bridge = bridges.remove(oldId)
 
         sessions[newId] = session
         if (bridge != null) {
-            bridges[newId] = bridge
             SSHTerminalBridgeRegistry.remove(oldId)
+            bridges[newId] = bridge
             SSHTerminalBridgeRegistry.register(newId, bridge)
         }
 
@@ -161,7 +182,7 @@ object SSHTerminalSessionManager {
         return true
     }
 
-    fun terminateSession(sessionId: String) {
+    fun removeSession(sessionId: String) {
         val bridge = bridges.remove(sessionId)
         bridge?.disconnect()
         SSHTerminalBridgeRegistry.remove(sessionId)
@@ -176,7 +197,7 @@ object SSHTerminalSessionManager {
         }
     }
 
-    fun terminateAllSessions() {
+    fun terminateAll() {
         bridges.values.forEach { it.disconnect() }
         bridges.clear()
         SSHTerminalBridgeRegistry.removeAll()
@@ -189,8 +210,9 @@ object SSHTerminalSessionManager {
     }
 
     private fun updateSessionList() {
+        val list = sessions.keys.toList()
         runOnUiThread {
-            _sessionList.value = sessions.keys.toList()
+            _sessionList.value = list
         }
     }
 }

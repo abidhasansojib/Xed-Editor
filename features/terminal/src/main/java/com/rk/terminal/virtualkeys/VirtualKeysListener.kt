@@ -2,7 +2,6 @@ package com.rk.terminal.virtualkeys
 
 import android.view.View
 import android.widget.Button
-import com.rk.settings.Settings
 import com.rk.terminal.ssh.SSHTerminalBridgeRegistry
 import com.termux.terminal.TerminalSession
 
@@ -12,31 +11,32 @@ class VirtualKeysListener(val session: TerminalSession) : VirtualKeysView.IVirtu
         val key = buttonInfo?.key ?: return
         val writeable: String =
             when (key) {
-                "UP" -> "\u001B[A" // Escape sequence for Up Arrow
-                "DOWN" -> "\u001B[B" // Escape sequence for Down Arrow
-                "LEFT" -> "\u001B[D" // Escape sequence for Left Arrow
-                "RIGHT" -> "\u001B[C" // Escape sequence for Right Arrow
-                "ENTER" -> "\r" // Carriage Return for Enter
-                "PGUP" -> "\u001B[5~" // Escape sequence for Page Up
-                "PGDN" -> "\u001B[6~" // Escape sequence for Page Down
-                "TAB" -> "\u0009" // Horizontal Tab
-                "HOME" -> "\u001B[H" // Escape sequence for Home
-                "END" -> "\u001B[F" // Escape sequence for End
-                "ESC" -> "\u001B" // Escape
+                "UP" -> "\u001B[A"
+                "DOWN" -> "\u001B[B"
+                "LEFT" -> "\u001B[D"
+                "RIGHT" -> "\u001B[C"
+                "ENTER" -> "\r"
+                "PGUP" -> "\u001B[5~"
+                "PGDN" -> "\u001B[6~"
+                "TAB" -> "\t"
+                "HOME" -> "\u001B[H"
+                "END" -> "\u001B[F"
+                "ESC" -> "\u001B"
+                "BKSP" -> "\u007F"
+                "DEL" -> "\u001B[3~"
+                "INS" -> "\u001B[2~"
                 else -> key
             }
 
-        if (Settings.use_ssh_terminal) {
-            val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
-            if (bridge != null) {
-                if (!bridge.isConnected && key == "ENTER") {
-                    val emulator = session.emulator
-                    bridge.reconnect(emulator?.mColumns ?: 80, emulator?.mRows ?: 24)
-                    return
-                }
-                bridge.write(writeable)
+        val bridge = SSHTerminalBridgeRegistry.getBridgeForSession(session)
+        if (bridge != null) {
+            if (!bridge.isConnected && key == "ENTER") {
+                val emulator = session.emulator
+                bridge.reconnect(emulator?.mColumns ?: 80, emulator?.mRows ?: 24)
                 return
             }
+            bridge.write(writeable)
+            return
         }
 
         session.write(writeable)

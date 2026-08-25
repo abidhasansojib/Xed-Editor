@@ -344,13 +344,21 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                 }
 
                 AndroidView(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                     factory = { ctx ->
                         VirtualKeysView(ctx, null).apply {
                             val view = terminalActivity.terminalView.get()
-                            if (view?.mTermSession != null) {
-                                virtualKeysViewClient = VirtualKeysListener(view.mTermSession)
+                            val session = view?.mTermSession ?: SSHTerminalSessionManager.getCurrentSession()
+                            if (session != null) {
+                                virtualKeysViewClient = VirtualKeysListener(session)
                             }
+
+                            setButtonColors(
+                                onSurfaceColor,
+                                0xFFf44336.toInt(),
+                                0x00000000,
+                                (0x33888888).toInt(),
+                            )
 
                             val extraKeysJson = Settings.terminal_extra_keys
                             try {
@@ -367,9 +375,16 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                     },
                     update = { vkv ->
                         val view = terminalActivity.terminalView.get()
-                        if (view?.mTermSession != null) {
-                            vkv.virtualKeysViewClient = VirtualKeysListener(view.mTermSession)
+                        val session = view?.mTermSession ?: SSHTerminalSessionManager.getCurrentSession()
+                        if (session != null) {
+                            vkv.virtualKeysViewClient = VirtualKeysListener(session)
                         }
+                        vkv.setButtonColors(
+                            onSurfaceColor,
+                            0xFFf44336.toInt(),
+                            0x00000000,
+                            (0x33888888).toInt(),
+                        )
                     },
                 )
             }

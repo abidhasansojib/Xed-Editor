@@ -122,10 +122,8 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
             isPassword = true,
             onInputValueChange = { passwordValue = it },
             onConfirm = {
-                if (passwordValue.isNotEmpty()) {
-                    SSHSecureStorage.savePassword(passwordValue)
-                    hasPassword = true
-                }
+                SSHSecureStorage.savePassword(passwordValue)
+                hasPassword = passwordValue.isNotEmpty()
             },
             onFinish = { showPasswordDialog = false },
         )
@@ -139,10 +137,8 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
             singleLineMode = false,
             onInputValueChange = { keyValue = it },
             onConfirm = {
-                if (keyValue.isNotBlank()) {
-                    SSHSecureStorage.savePrivateKey(keyValue.trim())
-                    hasPrivateKey = true
-                }
+                SSHSecureStorage.savePrivateKey(keyValue.trim())
+                hasPrivateKey = keyValue.trim().isNotEmpty()
             },
             onFinish = { showKeyDialog = false },
         )
@@ -219,7 +215,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                     showSwitch = false,
                     default = false,
                     onClick = {
-                        passwordValue = ""
+                        passwordValue = SSHSecureStorage.getPassword()
                         showPasswordDialog = true
                     },
                 )
@@ -247,30 +243,38 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                 )
             }
 
+            var isTestingConnection by remember { mutableStateOf(false) }
             SettingsItem(
                 label = stringResource(strings.ssh_test_connection),
-                description = stringResource(strings.ssh_test_connection_desc),
+                description = if (isTestingConnection) stringResource(strings.ssh_connecting).format(Settings.ssh_username, Settings.ssh_host, Settings.ssh_port)
+                              else stringResource(strings.ssh_test_connection_desc),
                 showSwitch = false,
                 default = false,
                 onClick = {
+                    if (isTestingConnection) return@SettingsItem
                     val config = SSHConfig.loadFromSettings()
                     if (!config.isConfigured()) {
                         toast(strings.ssh_missing_config)
                         return@SettingsItem
                     }
 
+                    isTestingConnection = true
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
                             SSHConnection.testConnection(config)
                         }
+                        isTestingConnection = false
 
+                        val activity = context as? android.app.Activity
                         result.onSuccess { banner ->
                             dialogRes(
+                                activity = activity,
                                 title = strings.ssh_connection_success.getString(),
                                 msg = banner,
                             )
                         }.onFailure { err ->
                             dialogRes(
+                                activity = activity,
                                 title = strings.ssh_connection_failed.getString().format(""),
                                 msg = err.localizedMessage ?: err.message ?: "Unknown error",
                             )

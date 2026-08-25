@@ -484,13 +484,16 @@ public final class VirtualKeysView extends GridLayout {
                             }
                         });
 
+                int buttonHeight = (int) (38 * getContext().getResources().getDisplayMetrics().density);
                 LayoutParams param = new GridLayout.LayoutParams();
                 param.width = 0;
-                param.height = 0;
+                param.height = buttonHeight;
                 param.setMargins(0, 0, 0, 0);
                 param.columnSpec = GridLayout.spec(col, GridLayout.FILL, 1.f);
                 param.rowSpec = GridLayout.spec(row, GridLayout.FILL, 1.f);
                 button.setLayoutParams(param);
+                button.setMinHeight(buttonHeight);
+                button.setMinimumHeight(buttonHeight);
 
                 addView(button);
             }
