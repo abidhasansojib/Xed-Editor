@@ -844,9 +844,37 @@ public final class TerminalView extends View {
             if (keyCode >= KeyEvent.KEYCODE_A && keyCode <= KeyEvent.KEYCODE_Z) {
                 result = (shiftDown ? 'A' : 'a') + (keyCode - KeyEvent.KEYCODE_A);
             } else if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
-                result = '0' + (keyCode - KeyEvent.KEYCODE_0);
+                if (shiftDown) {
+                    switch (keyCode) {
+                        case KeyEvent.KEYCODE_1: result = '!'; break;
+                        case KeyEvent.KEYCODE_2: result = '@'; break;
+                        case KeyEvent.KEYCODE_3: result = '#'; break;
+                        case KeyEvent.KEYCODE_4: result = '$'; break;
+                        case KeyEvent.KEYCODE_5: result = '%'; break;
+                        case KeyEvent.KEYCODE_6: result = '^'; break;
+                        case KeyEvent.KEYCODE_7: result = '&'; break;
+                        case KeyEvent.KEYCODE_8: result = '*'; break;
+                        case KeyEvent.KEYCODE_9: result = '('; break;
+                        case KeyEvent.KEYCODE_0: result = ')'; break;
+                        default: result = '0' + (keyCode - KeyEvent.KEYCODE_0); break;
+                    }
+                } else {
+                    result = '0' + (keyCode - KeyEvent.KEYCODE_0);
+                }
             } else {
                 switch (keyCode) {
+                    case KeyEvent.KEYCODE_STAR:
+                        result = '*';
+                        break;
+                    case KeyEvent.KEYCODE_PLUS:
+                        result = '+';
+                        break;
+                    case KeyEvent.KEYCODE_AT:
+                        result = '@';
+                        break;
+                    case KeyEvent.KEYCODE_POUND:
+                        result = '#';
+                        break;
                     case KeyEvent.KEYCODE_SPACE:
                         result = ' ';
                         break;

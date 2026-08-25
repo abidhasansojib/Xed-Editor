@@ -15,22 +15,27 @@ class VirtualKeysListener(val session: TerminalSession) : VirtualKeysView.IVirtu
         }
 
         val rawKey = buttonInfo?.key ?: return
-        val upperKey = rawKey.trim().uppercase()
+        val trimmed = rawKey.trim()
+        val upperKey = trimmed.uppercase()
 
         val virtualKeysView = Terminal.instance?.virtualKeysView?.get()
         val ctrlActive = virtualKeysView?.readSpecialButton(SpecialButton.CTRL, true) == true
         val altActive = virtualKeysView?.readSpecialButton(SpecialButton.ALT, true) == true
         val shiftActive = virtualKeysView?.readSpecialButton(SpecialButton.SHIFT, true) == true
 
-        // Handle composite shortcuts like "CTRL+L", "CTRL+C", "CTRL+D", "CTRL+Z", "ALT+B", etc.
+        // Handle CTRL shortcuts like "CTRL+L", "CTRL+C", "CTRL+D", "CTRL+Z", "C-c", etc.
         if (upperKey.startsWith("CTRL+") || upperKey.startsWith("CTRL-") || upperKey.startsWith("C-")) {
-            val subKey = upperKey.substringAfter('+').substringAfter('-')
+            val subKey = trimmed.substringAfter('+').substringAfter('-')
             sendCtrlKey(subKey, altActive)
             return
         }
 
-        if (upperKey.startsWith("ALT+") || upperKey.startsWith("ALT-") || upperKey.startsWith("A-") || upperKey.startsWith("M-")) {
-            val subKey = upperKey.substringAfter('+').substringAfter('-')
+        // Handle ESC / ALT / META shortcuts like "ESC+*", "ESC+.", "ESC+D", "ESC-b", "ALT+*", "M-*", etc.
+        if (upperKey.startsWith("ESC+") || upperKey.startsWith("ESC-") ||
+            upperKey.startsWith("ALT+") || upperKey.startsWith("ALT-") ||
+            upperKey.startsWith("A-") || upperKey.startsWith("M-") ||
+            upperKey.startsWith("META+") || upperKey.startsWith("META-")) {
+            val subKey = trimmed.substringAfter('+').substringAfter('-')
             sendAltKey(subKey)
             return
         }
@@ -79,7 +84,7 @@ class VirtualKeysListener(val session: TerminalSession) : VirtualKeysView.IVirtu
             return
         }
 
-        // Apply active ALT modifier
+        // Apply active ALT modifier (or ESC prefix)
         if (altActive) {
             sendAltKey(rawKey)
             return
