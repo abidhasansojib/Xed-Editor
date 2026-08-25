@@ -7,21 +7,39 @@ import com.termux.terminal.TerminalSession
 
 class VirtualKeyClient(val session: TerminalSession) : IVirtualKeysView {
     override fun onVirtualKeyButtonClick(view: View?, buttonInfo: VirtualKeyButton?, button: Button?) {
-        val key = buttonInfo?.key
-        if (key.isNullOrEmpty()) {
+        val rawKey = buttonInfo?.key
+        if (rawKey.isNullOrEmpty()) {
             return
         }
-        when (key) {
-            "ESC" -> session.write("\u001B") // ESC
-            "TAB" -> session.write("\u0009") // TAB
-            "HOME" -> session.write("\u001B[H") // HOME
-            "UP" -> session.write("\u001B[A") // UP Arrow (ANSI escape code)
-            "DOWN" -> session.write("\u001B[B") // DOWN Arrow (ANSI escape code)
-            "LEFT" -> session.write("\u001B[D") // LEFT Arrow (ANSI escape code)
-            "RIGHT" -> session.write("\u001B[C") // RIGHT Arrow (ANSI escape code)
-            "PGUP" -> session.write("\u001B[5~") // Page Up (ANSI escape code)
-            "PGDN" -> session.write("\u001B[6~") // Page Down (ANSI escape code)
-            "END" -> session.write("\u001B[4~") // End (ANSI escape code, may vary)
+        val upperKey = rawKey.trim().uppercase()
+        when (upperKey) {
+            "ESC", "ESCAPE" -> session.write("\u001B")
+            "TAB" -> session.write("\u0009")
+            "HOME" -> session.write("\u001B[H")
+            "END" -> session.write("\u001B[F")
+            "UP" -> session.write("\u001B[A")
+            "DOWN" -> session.write("\u001B[B")
+            "LEFT" -> session.write("\u001B[D")
+            "RIGHT" -> session.write("\u001B[C")
+            "PGUP", "PAGEUP" -> session.write("\u001B[5~")
+            "PGDN", "PAGEDOWN" -> session.write("\u001B[6~")
+            "ENTER" -> session.write("\r")
+            "BKSP", "BACKSPACE" -> session.write("\u007F")
+            "DEL", "DELETE" -> session.write("\u001B[3~")
+            "INS", "INSERT" -> session.write("\u001B[2~")
+            "CLEAR" -> session.write("\u000C")
+            "F1" -> session.write("\u001BOP")
+            "F2" -> session.write("\u001BOQ")
+            "F3" -> session.write("\u001BOR")
+            "F4" -> session.write("\u001BOS")
+            "F5" -> session.write("\u001B[15~")
+            "F6" -> session.write("\u001B[17~")
+            "F7" -> session.write("\u001B[18~")
+            "F8" -> session.write("\u001B[19~")
+            "F9" -> session.write("\u001B[20~")
+            "F10" -> session.write("\u001B[21~")
+            "F11" -> session.write("\u001B[23~")
+            "F12" -> session.write("\u001B[24~")
             else -> session.write(buttonInfo.key)
         }
     }

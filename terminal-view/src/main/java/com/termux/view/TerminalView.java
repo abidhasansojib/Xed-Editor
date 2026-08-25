@@ -839,6 +839,60 @@ public final class TerminalView extends View {
         int result = event.getUnicodeChar(effectiveMetaState);
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
             mClient.logInfo(LOG_TAG, "KeyEvent#getUnicodeChar(" + effectiveMetaState + ") returned: " + result);
+
+        if (result == 0) {
+            if (keyCode >= KeyEvent.KEYCODE_A && keyCode <= KeyEvent.KEYCODE_Z) {
+                result = (shiftDown ? 'A' : 'a') + (keyCode - KeyEvent.KEYCODE_A);
+            } else if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
+                result = '0' + (keyCode - KeyEvent.KEYCODE_0);
+            } else {
+                switch (keyCode) {
+                    case KeyEvent.KEYCODE_SPACE:
+                        result = ' ';
+                        break;
+                    case KeyEvent.KEYCODE_GRAVE:
+                        result = shiftDown ? '~' : '`';
+                        break;
+                    case KeyEvent.KEYCODE_MINUS:
+                        result = shiftDown ? '_' : '-';
+                        break;
+                    case KeyEvent.KEYCODE_EQUALS:
+                        result = shiftDown ? '+' : '=';
+                        break;
+                    case KeyEvent.KEYCODE_LEFT_BRACKET:
+                        result = shiftDown ? '{' : '[';
+                        break;
+                    case KeyEvent.KEYCODE_RIGHT_BRACKET:
+                        result = shiftDown ? '}' : ']';
+                        break;
+                    case KeyEvent.KEYCODE_BACKSLASH:
+                        result = shiftDown ? '|' : '\\';
+                        break;
+                    case KeyEvent.KEYCODE_SEMICOLON:
+                        result = shiftDown ? ':' : ';';
+                        break;
+                    case KeyEvent.KEYCODE_APOSTROPHE:
+                        result = shiftDown ? '"' : '\'';
+                        break;
+                    case KeyEvent.KEYCODE_COMMA:
+                        result = shiftDown ? '<' : ',';
+                        break;
+                    case KeyEvent.KEYCODE_PERIOD:
+                        result = shiftDown ? '>' : '.';
+                        break;
+                    case KeyEvent.KEYCODE_SLASH:
+                        result = shiftDown ? '?' : '/';
+                        break;
+                    case KeyEvent.KEYCODE_TAB:
+                        result = '\t';
+                        break;
+                    case KeyEvent.KEYCODE_ENTER:
+                        result = '\r';
+                        break;
+                }
+            }
+        }
+
         if (result == 0) {
             return false;
         }
