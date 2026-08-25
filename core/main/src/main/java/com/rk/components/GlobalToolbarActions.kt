@@ -134,7 +134,7 @@ fun GlobalToolbarActions(viewModel: MainViewModel, drawerViewModel: DrawerViewMo
                 tempFileName = it
                 errorMessage = when {
                     it.isBlank() -> strings.name_empty_err.getString()
-                    it.contains("/") || it.contains("\\") -> strings.invalid_name.getString()
+                    it.contains("/") || it.contains("\\") -> strings.invalid_characters.getString()
                     else -> null
                 }
             },
