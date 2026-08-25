@@ -106,6 +106,7 @@ fun TerminalExtraKeys() {
         val selectionColors = LocalTextSelectionColors.current
         val isDarkMode = isSystemInDarkTheme(context)
         val colorScheme = MaterialTheme.colorScheme
+        val gitColorScheme = GitColorScheme.create()
 
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             EditorNotice(
@@ -139,7 +140,6 @@ fun TerminalExtraKeys() {
                             Settings.terminal_extra_keys = it.editor.text.toString()
                         }
 
-                        val gitColorScheme = GitColorScheme.create()
                         setThemeColors(
                             isDarkMode = isDarkMode,
                             selectionColors = selectionColors,

@@ -154,25 +154,25 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
     override fun readControlKey(): Boolean {
         val activity = Terminal.instance ?: return false
         val state = activity.virtualKeysView.get()?.readSpecialButton(SpecialButton.CTRL, true)
-        return state != null && state
+        return state == true
     }
 
     override fun readAltKey(): Boolean {
         val activity = Terminal.instance ?: return false
         val state = activity.virtualKeysView.get()?.readSpecialButton(SpecialButton.ALT, true)
-        return state != null && state
+        return state == true
     }
 
     override fun readShiftKey(): Boolean {
         val activity = Terminal.instance ?: return false
         val state = activity.virtualKeysView.get()?.readSpecialButton(SpecialButton.SHIFT, true)
-        return state != null && state
+        return state == true
     }
 
     override fun readFnKey(): Boolean {
         val activity = Terminal.instance ?: return false
         val state = activity.virtualKeysView.get()?.readSpecialButton(SpecialButton.FN, true)
-        return state != null && state
+        return state == true
     }
 
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
