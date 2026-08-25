@@ -338,9 +338,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                             if (currentSession != null && view.mTermSession != currentSession) {
                                 view.attachSession(currentSession)
                             }
-                            if (view.mRenderer == null || view.mRenderer.mTextSize != Settings.terminal_font_size) {
-                                view.setTextSize(Settings.terminal_font_size)
-                            }
+                            view.setTextSize(Settings.terminal_font_size)
                             view.applyTerminalColors(onSurfaceColor, surfaceColor)
                         },
                     )
