@@ -23,11 +23,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -171,7 +171,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                 },
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Settings,
+                                    imageVector = Icons.Default.Settings,
                                     contentDescription = stringResource(strings.settings),
                                 )
                             }
@@ -205,7 +205,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                                 modifier = Modifier.size(24.dp),
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Outlined.Edit,
+                                                    imageVector = Icons.Default.Edit,
                                                     contentDescription = stringResource(strings.rename),
                                                     modifier = Modifier.size(20.dp),
                                                 )
@@ -230,7 +230,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                                 modifier = Modifier.size(24.dp),
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Outlined.Delete,
+                                                    imageVector = Icons.Default.Delete,
                                                     contentDescription = stringResource(strings.delete),
                                                     modifier = Modifier.size(20.dp),
                                                 )
@@ -283,7 +283,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                 context.startActivity(intent)
                             },
                         ) {
-                            Icon(imageVector = Icons.Outlined.Settings, contentDescription = stringResource(strings.settings))
+                            Icon(imageVector = Icons.Default.Settings, contentDescription = stringResource(strings.settings))
                         }
                     },
                 )
