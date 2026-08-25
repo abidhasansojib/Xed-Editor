@@ -5,20 +5,22 @@ import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.OutputStream
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
  * Manages an active SSH connection and interactive PTY shell channel using JSch.
- * Uses direct channel.outputStream writing to ensure zero premature EOF signals
- * and indefinite long-term shell persistence.
+ * Uses a connected PipedInputStream/PipedOutputStream pair for JSch ChannelShell stdin
+ * to ensure non-blocking keystroke delivery without ever emitting premature EOF signals.
  */
 class SSHConnection(private val config: SSHConfig) {
     private var jschSession: Session? = null
     private var shellChannel: ChannelShell? = null
-    private var channelOutputStream: OutputStream? = null
+    private var pipedOutStream: PipedOutputStream? = null
+    private var pipedInStream: PipedInputStream? = null
     private var readerThread: Thread? = null
     private val isConnectedFlag = AtomicBoolean(false)
 
@@ -102,9 +104,11 @@ class SSHConnection(private val config: SSHConfig) {
             channel.setPtyType("xterm-256color")
             channel.setPtySize(safeCols, safeRows, width, height)
 
-            channel.setInputStream(null)
-            val channelOut = channel.outputStream
-            channelOutputStream = channelOut
+            val pout = PipedOutputStream()
+            val pin = PipedInputStream(pout, 8192)
+            pipedOutStream = pout
+            pipedInStream = pin
+            channel.setInputStream(pin, false)
 
             val inStream = channel.inputStream
 
@@ -147,7 +151,7 @@ class SSHConnection(private val config: SSHConfig) {
     fun write(data: ByteArray, offset: Int = 0, count: Int = data.size) {
         if (!isConnectedFlag.get() || count <= 0) return
         try {
-            channelOutputStream?.apply {
+            pipedOutStream?.apply {
                 write(data, offset, count)
                 flush()
             }
@@ -176,9 +180,14 @@ class SSHConnection(private val config: SSHConfig) {
 
     private fun cleanup() {
         try {
-            channelOutputStream?.close()
+            pipedOutStream?.close()
         } catch (_: Exception) {}
-        channelOutputStream = null
+        pipedOutStream = null
+
+        try {
+            pipedInStream?.close()
+        } catch (_: Exception) {}
+        pipedInStream = null
 
         try {
             shellChannel?.disconnect()
