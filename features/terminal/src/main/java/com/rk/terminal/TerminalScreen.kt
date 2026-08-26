@@ -211,7 +211,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = false,
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
