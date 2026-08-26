@@ -13,6 +13,7 @@ import io.github.rosemoe.sora.lang.completion.snippet.parser.CodeSnippetParser
 import io.github.rosemoe.sora.text.CharPosition
 import io.github.rosemoe.sora.text.ContentReference
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.launch
 
 data class Snippet(
     val trigger: String,
@@ -20,6 +21,7 @@ data class Snippet(
     val description: String,
     val template: String,
     val detail: String? = null,
+    val scope: String? = null,
 ) {
     val parsedCodeSnippet: CodeSnippet by lazy {
         CodeSnippetParser.parse(template)
@@ -32,6 +34,55 @@ object SnippetManager {
 
     init {
         registerBuiltinSnippets()
+        loadCustomSnippetsAsync()
+    }
+
+    fun registerSnippet(scope: String, snippet: Snippet) {
+        val normalized = scope.lowercase()
+        snippetRegistry.compute(normalized) { _, current ->
+            val list = current?.toMutableList() ?: mutableListOf()
+            list.removeAll { it.trigger == snippet.trigger }
+            list.add(0, snippet)
+            list
+        }
+    }
+
+    fun registerSnippets(scope: String, snippets: List<Snippet>) {
+        val normalized = scope.lowercase()
+        snippetRegistry.compute(normalized) { _, current ->
+            val list = current?.toMutableList() ?: mutableListOf()
+            for (snip in snippets) {
+                list.removeAll { it.trigger == snip.trigger }
+                list.add(snip)
+            }
+            list
+        }
+    }
+
+    fun loadCustomSnippetsAsync() {
+        try {
+            val app = com.rk.utils.application ?: return
+            val snippetsDir = app.filesDir.resolve("snippets")
+            if (!snippetsDir.exists()) {
+                snippetsDir.mkdirs()
+                return
+            }
+            if (!snippetsDir.isDirectory) return
+
+            com.rk.DefaultScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val jsonFiles = snippetsDir.listFiles { file ->
+                    file.isFile && (file.extension.equals("json", ignoreCase = true) || file.name.endsWith(".code-snippets", ignoreCase = true))
+                } ?: return@launch
+
+                for (file in jsonFiles) {
+                    val snippets = VsCodeSnippetLoader.parseFile(file)
+                    for (snippet in snippets) {
+                        val targetScope = snippet.scope ?: file.nameWithoutExtension.lowercase()
+                        registerSnippet(targetScope, snippet)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     fun getSnippetsForScope(scope: String): List<Snippet> {
@@ -64,7 +115,7 @@ object SnippetManager {
         var start = col - 1
         while (start >= 0) {
             val ch = line[start]
-            if (ch.isLetterOrDigit() || ch == '_' || ch == '$' || ch == ':' || ch == '!' || ch == '-' || ch == '#' || ch == '.') {
+            if (ch.isLetterOrDigit() || ch == '_' || ch == '$' || ch == ':' || ch == '!' || ch == '-' || ch == '#' || ch == '.' || ch == '>' || ch == '+' || ch == '*' || ch == '[' || ch == ']' || ch == '=' || ch == '{' || ch == '}') {
                 start--
             } else {
                 break
@@ -91,6 +142,9 @@ object SnippetManager {
     }
 
     fun parseDynamicEmmet(prefix: String, scope: String): Snippet? {
+        val parsed = EmmetParser.parse(prefix, scope)
+        if (parsed != null) return parsed
+
         val normalized = scope.lowercase()
         if (!normalized.contains("html") && !normalized.contains("xml") && !normalized.contains("htm")) {
             return null
