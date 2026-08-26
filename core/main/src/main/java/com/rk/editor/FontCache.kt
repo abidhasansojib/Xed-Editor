@@ -12,11 +12,12 @@ object FontCache {
     data class CachedFont(val typeface: Typeface, val composeFont: Font)
 
     fun loadFont(context: Context, path: String, isAsset: Boolean) {
-        if (cachedFonts.containsKey(path)) return
+        if (path.isBlank() || cachedFonts.containsKey(path)) return
         doLoadFont(context, path, isAsset).onFailure { it.printStackTrace() }
     }
 
     private fun doLoadFont(context: Context, path: String, isAsset: Boolean) = runCatching {
+        if (path.isBlank()) return@runCatching
         val font =
             if (isAsset) {
                 val typeface = Typeface.createFromAsset(context.assets, path)
@@ -35,6 +36,7 @@ object FontCache {
     }
 
     private fun getCachedFont(context: Context, path: String, isAsset: Boolean): CachedFont? {
+        if (path.isBlank()) return null
         cachedFonts[path]?.let { return it }
         doLoadFont(context, path, isAsset).fold(
             onFailure = {

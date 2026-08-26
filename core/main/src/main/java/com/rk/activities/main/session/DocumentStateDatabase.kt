@@ -54,7 +54,7 @@ abstract class DocumentStateDatabase : RoomDatabase() {
                 ?: synchronized(this) {
                     val instance =
                         Room.databaseBuilder(
-                                context,
+                                context.applicationContext,
                                 DocumentStateDatabase::class.java,
                                 "document_state_database",
                             )

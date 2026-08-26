@@ -55,6 +55,7 @@ import com.rk.search.FindingsDialog
 import com.rk.settings.Settings
 import com.rk.settings.editor.refreshEditorSettings
 import com.rk.tabs.base.Tab
+import com.rk.utils.application
 import com.rk.utils.errorDialog
 import com.rk.utils.hasBinaryChars
 import io.github.rosemoe.sora.text.Content
@@ -653,7 +654,8 @@ open class EditorTab(
         editorState.contentRendered.await()
         val editor = editorState.editor.get() ?: return
 
-        val db = DocumentStateDatabase.getDatabase(MainActivity.instance!!)
+        val context = MainActivity.instance ?: application ?: return
+        val db = DocumentStateDatabase.getDatabase(context)
         val state = db.documentStateDao().getState(file.getAbsolutePath())
         if (state != null) {
             val maxLine = editor.text.lineCount - 1
@@ -691,7 +693,8 @@ open class EditorTab(
             )
 
         GlobalScope.launch(Dispatchers.IO) {
-            val db = DocumentStateDatabase.getDatabase(MainActivity.instance!!)
+            val context = MainActivity.instance ?: application ?: return@launch
+            val db = DocumentStateDatabase.getDatabase(context)
             db.documentStateDao().insertState(state)
         }
     }

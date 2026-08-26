@@ -54,8 +54,14 @@ fun ExtraKeys(editorTab: EditorTab) {
                     isOn = command is ToggleableCommand && command.isOn(),
                     enabled = command.isEnabled() && command.isSupported(),
                     repeatOnHold = command.repeatOnHold,
-                    onLongClick = { command.onLongClick(ActionContext(MainActivity.instance!!)) },
-                    onClick = { command.performCommand(ActionContext(MainActivity.instance!!)) },
+                    onLongClick = {
+                        val activity = MainActivity.instance ?: return@ExtraKey false
+                        command.onLongClick(ActionContext(activity))
+                    },
+                    onClick = {
+                        val activity = MainActivity.instance ?: return@ExtraKey
+                        command.performCommand(ActionContext(activity))
+                    },
                 )
             }
         }

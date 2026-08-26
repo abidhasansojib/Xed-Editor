@@ -99,7 +99,7 @@ object BulletContinuation : IntelligentFeature() {
             var trailingSpace = olLiMatch.groupValues[4]
             val checkbox = olLiMatch.groupValues[5].replace("[x]", "[ ]")
 
-            val marker = (previousMarker.toInt() + 1).toString()
+            val marker = ((previousMarker.toLongOrNull() ?: 1L) + 1).toString()
 
             // Remove trailing spaces on digit length change (e.g. 9 to 10) to align text
             val markerDiff = previousMarker.length - marker.length

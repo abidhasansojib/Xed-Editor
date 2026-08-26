@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import org.eclipse.tm4e.core.registry.IThemeSource
 import java.io.ByteArrayInputStream
 import java.io.InputStreamReader
+import java.util.concurrent.ConcurrentHashMap
 
 private var selectionColor: Color? = null
 
@@ -33,7 +34,7 @@ fun getSelectionColor(): Color? {
 }
 
 object ThemeManager {
-    private val colorSchemeCache = hashMapOf<String, TextMateColorScheme>()
+    private val colorSchemeCache = ConcurrentHashMap<String, TextMateColorScheme>()
 
     suspend fun createColorScheme(context: Context, patchArgs: Editor.PatchArgs?) =
         withContext(Dispatchers.IO) {

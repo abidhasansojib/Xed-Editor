@@ -15,7 +15,9 @@ import io.github.rosemoe.sora.text.TextRange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
@@ -79,6 +81,7 @@ class DefaultColorProvider(private val editor: Editor) : InlayHintProvider {
             val container = InlayHintsContainer()
 
             for (i in 0 until text.lineCount) {
+                if (!isActive) return@launch
                 val lineText = text.getLineString(i)
                 val matcher = colorPattern.matcher(lineText)
                 while (matcher.find()) {
@@ -113,6 +116,7 @@ class DefaultColorProvider(private val editor: Editor) : InlayHintProvider {
         contentChangeSubscription.unsubscribe()
         lspConnectionSubscription.unsubscribe()
         updateJob?.cancel()
+        scope.cancel()
         editor.unregisterInlayHintProvider(this)
     }
 }

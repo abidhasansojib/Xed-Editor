@@ -55,7 +55,7 @@ object AutoCloseTag : IntelligentFeature() {
             editor.text.insert(lineIndexBefore, columnIndexBefore, "</$tagName>")
             editor.setSelection(lineIndexBefore, columnIndexBefore)
         } else {
-            if (lineToCursor.length < line.length) return
+            if (lineToCursor.length < line.length || columnIndexBefore < 2) return
             if (lineToCursor[columnIndexBefore - 2] != ' ') {
                 editor.text.insert(lineIndexBefore, columnIndexBefore - 1, " ")
             }
