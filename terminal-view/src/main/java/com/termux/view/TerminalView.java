@@ -169,6 +169,10 @@ public final class TerminalView extends View {
             @Override
             public boolean onScroll(MotionEvent e, float distanceX, float distanceY) {
                 if (mEmulator == null) return true;
+                if (mGestureRecognizer.isScaling()) return true;
+                if (!mScroller.isFinished()) {
+                    mScroller.abortAnimation();
+                }
                 if (mEmulator.isMouseTrackingActive() && e.isFromSource(InputDevice.SOURCE_MOUSE)) {
                     // If moving with mouse pointer while pressing button, report that instead of scroll.
                     // This means that we never report moving with button press-events for touch input,
@@ -178,9 +182,13 @@ public final class TerminalView extends View {
                 } else {
                     scrolledWithFinger = true;
                     distanceY += mScrollRemainder;
-                    int deltaRows = (int) (distanceY / mRenderer.mFontLineSpacing);
-                    mScrollRemainder = distanceY - deltaRows * mRenderer.mFontLineSpacing;
-                    doScroll(e, deltaRows);
+                    int lineHeight = mRenderer.mFontLineSpacing;
+                    if (lineHeight <= 0) lineHeight = 1;
+                    int deltaRows = (int) (distanceY / lineHeight);
+                    mScrollRemainder = distanceY - deltaRows * lineHeight;
+                    if (deltaRows != 0) {
+                        doScroll(e, deltaRows);
+                    }
                 }
                 return true;
             }
@@ -196,33 +204,58 @@ public final class TerminalView extends View {
             @Override
             public boolean onFling(final MotionEvent e2, float velocityX, float velocityY) {
                 if (mEmulator == null) return true;
-                // Do not start scrolling until last fling has been taken care of:
-                if (!mScroller.isFinished()) return true;
+                if (mGestureRecognizer.isScaling()) return true;
 
-                final boolean mouseTrackingAtStartOfFling = mEmulator.isMouseTrackingActive();
-                float SCALE = 0.25f;
-                if (mouseTrackingAtStartOfFling) {
-                    mScroller.fling(0, 0, 0, -(int) (velocityY * SCALE), 0, 0, -mEmulator.mRows / 2, mEmulator.mRows / 2);
-                } else {
-                    mScroller.fling(0, mTopRow, 0, -(int) (velocityY * SCALE), 0, 0, -mEmulator.getScreen().getActiveTranscriptRows(), 0);
+                if (!mScroller.isFinished()) {
+                    mScroller.abortAnimation();
                 }
 
-                post(new Runnable() {
-                    private int mLastY = 0;
+                final boolean mouseTrackingAtStartOfFling = mEmulator.isMouseTrackingActive();
+                int lineHeight = mRenderer.mFontLineSpacing;
+                if (lineHeight <= 0) lineHeight = 1;
+
+                if (mouseTrackingAtStartOfFling) {
+                    mScroller.fling(0, 0, 0, -(int) velocityY, 0, 0, -mEmulator.mRows * lineHeight / 2, mEmulator.mRows * lineHeight / 2);
+                } else {
+                    int startY = mTopRow * lineHeight;
+                    int minY = -mEmulator.getScreen().getActiveTranscriptRows() * lineHeight;
+                    int maxY = 0;
+                    mScroller.fling(0, startY, 0, -(int) velocityY, 0, 0, minY, maxY);
+                }
+
+                postOnAnimation(new Runnable() {
+                    private int mLastY = mouseTrackingAtStartOfFling ? 0 : mTopRow * mRenderer.mFontLineSpacing;
 
                     @Override
                     public void run() {
-                        if (mouseTrackingAtStartOfFling != mEmulator.isMouseTrackingActive()) {
+                        if (mEmulator == null || mouseTrackingAtStartOfFling != mEmulator.isMouseTrackingActive()) {
                             mScroller.abortAnimation();
                             return;
                         }
                         if (mScroller.isFinished()) return;
+
                         boolean more = mScroller.computeScrollOffset();
                         int newY = mScroller.getCurrY();
-                        int diff = mouseTrackingAtStartOfFling ? (newY - mLastY) : (newY - mTopRow);
-                        doScroll(e2, diff);
-                        mLastY = newY;
-                        if (more) post(this);
+                        int lineHeight = mRenderer.mFontLineSpacing;
+                        if (lineHeight <= 0) lineHeight = 1;
+
+                        if (mouseTrackingAtStartOfFling) {
+                            int diff = (newY - mLastY) / lineHeight;
+                            if (diff != 0) {
+                                mLastY += diff * lineHeight;
+                                doScroll(e2, diff);
+                            }
+                        } else {
+                            int targetRow = newY / lineHeight;
+                            int diff = targetRow - mTopRow;
+                            if (diff != 0) {
+                                doScroll(e2, diff);
+                            }
+                        }
+
+                        if (more && !mScroller.isFinished()) {
+                            postOnAnimation(this);
+                        }
                     }
                 });
 
@@ -231,13 +264,11 @@ public final class TerminalView extends View {
 
             @Override
             public boolean onDown(float x, float y) {
-                // Why is true not returned here?
-                // https://developer.android.com/training/gestures/detector.html#detect-a-subset-of-supported-gestures
-                // Although setting this to true still does not solve the following errors when long pressing in terminal view text area
-                // ViewDragHelper: Ignoring pointerId=0 because ACTION_DOWN was not received for this pointer before ACTION_MOVE
-                // Commenting out the call to mGestureDetector.onTouchEvent(event) in GestureAndScaleRecognizer#onTouchEvent() removes
-                // the error logging, so issue is related to GestureDetector
-                return false;
+                mScrollRemainder = 0.0f;
+                if (!mScroller.isFinished()) {
+                    mScroller.abortAnimation();
+                }
+                return true;
             }
 
             @Override
@@ -248,6 +279,10 @@ public final class TerminalView extends View {
 
             @Override
             public void onLongPress(MotionEvent event) {
+                if (mGestureRecognizer.isScaling()) return;
+                if (!mScroller.isFinished()) {
+                    mScroller.abortAnimation();
+                }
                 if (mGestureRecognizer.isInProgress()) return;
                 if (mClient.onLongPress(event)) return;
                 if (!isSelectingText()) {
@@ -512,12 +547,15 @@ public final class TerminalView extends View {
      * @param textSize the new font size, in density-independent pixels.
      */
     public void setTextSize(int textSize) {
+        if (mRenderer != null && mRenderer.mTextSize == textSize) return;
         mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
         updateSize();
+        invalidate();
     }
 
     public void setTypeface(Typeface newTypeface) {
-        mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface);
+        if (mRenderer != null && mRenderer.mTypeface == newTypeface) return;
+        mRenderer = new TerminalRenderer(mRenderer == null ? 14 : mRenderer.mTextSize, newTypeface);
         updateSize();
         invalidate();
     }
@@ -572,19 +610,23 @@ public final class TerminalView extends View {
 
     /** Perform a scroll, either from dragging the screen or by scrolling a mouse wheel. */
     void doScroll(MotionEvent event, int rowsDown) {
+        if (rowsDown == 0) return;
         boolean up = rowsDown < 0;
         int amount = Math.abs(rowsDown);
-        for (int i = 0; i < amount; i++) {
-            if (mEmulator.isMouseTrackingActive()) {
+        if (mEmulator.isMouseTrackingActive()) {
+            for (int i = 0; i < amount; i++) {
                 sendMouseEventCode(event, up ? TerminalEmulator.MOUSE_WHEELUP_BUTTON : TerminalEmulator.MOUSE_WHEELDOWN_BUTTON, true);
-            } else if (mEmulator.isAlternateBufferActive()) {
-                // Send up and down key events for scrolling, which is what some terminals do to make scroll work in
-                // e.g. less, which shifts to the alt screen without mouse handling.
-                handleKeyCode(up ? KeyEvent.KEYCODE_DPAD_UP : KeyEvent.KEYCODE_DPAD_DOWN, 0);
-            } else {
-                mTopRow = Math.min(0, Math.max(-(mEmulator.getScreen().getActiveTranscriptRows()), mTopRow + (up ? -1 : 1)));
-                if (!awakenScrollBars()) invalidate();
             }
+        } else if (mEmulator.isAlternateBufferActive()) {
+            // Send up and down key events for scrolling, which is what some terminals do to make scroll work in
+            // e.g. less, which shifts to the alt screen without mouse handling.
+            for (int i = 0; i < amount; i++) {
+                handleKeyCode(up ? KeyEvent.KEYCODE_DPAD_UP : KeyEvent.KEYCODE_DPAD_DOWN, 0);
+            }
+        } else {
+            int activeTranscriptRows = mEmulator.getScreen().getActiveTranscriptRows();
+            mTopRow = Math.min(0, Math.max(-activeTranscriptRows, mTopRow + rowsDown));
+            if (!awakenScrollBars()) invalidate();
         }
     }
 
@@ -605,7 +647,13 @@ public final class TerminalView extends View {
     @TargetApi(23)
     public boolean onTouchEvent(MotionEvent event) {
         if (mEmulator == null) return true;
-        final int action = event.getAction();
+        final int action = event.getActionMasked();
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            if (!mScroller.isFinished()) {
+                mScroller.abortAnimation();
+            }
+        }
 
         if (isSelectingText()) {
             updateFloatingToolbarVisibility(event);
@@ -626,10 +674,10 @@ public final class TerminalView extends View {
                     }
                 }
             } else if (mEmulator.isMouseTrackingActive()) { // BUTTON_PRIMARY.
-                switch (event.getAction()) {
+                switch (action) {
                     case MotionEvent.ACTION_DOWN:
                     case MotionEvent.ACTION_UP:
-                        sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, event.getAction() == MotionEvent.ACTION_DOWN);
+                        sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, action == MotionEvent.ACTION_DOWN);
                         break;
                     case MotionEvent.ACTION_MOVE:
                         sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
@@ -1101,7 +1149,8 @@ public final class TerminalView extends View {
             if (mTerminalCursorBlinkerRunnable != null)
                 mTerminalCursorBlinkerRunnable.setEmulator(mEmulator);
 
-            mTopRow = 0;
+            int activeTranscriptRows = mEmulator.getScreen().getActiveTranscriptRows();
+            mTopRow = Math.min(0, Math.max(-activeTranscriptRows, mTopRow));
             scrollTo(0, 0);
             invalidate();
         }

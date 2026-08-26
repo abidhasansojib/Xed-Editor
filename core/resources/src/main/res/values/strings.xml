@@ -842,4 +842,9 @@
     <string name="rootfs_root">Container Rootfs (/)</string>
     <string name="open_container_file">Open container file</string>
     <string name="open_container_file_desc">Open and edit a file from Droidspaces container</string>
+    <string name="android_root_shell">Android Root Shell</string>
+    <string name="android_root_shell_desc">Android host root shell (su)</string>
+    <string name="android_root_terminal">Android Rooted Terminal</string>
+    <string name="host_system">Host System</string>
+    <string name="container_environment">Container Environment</string>
 </resources>

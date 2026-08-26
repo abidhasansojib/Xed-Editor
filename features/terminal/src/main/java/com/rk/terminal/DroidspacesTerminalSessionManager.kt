@@ -39,6 +39,10 @@ object DroidspacesTerminalSessionManager {
         return if (id.isNotEmpty()) sessions[id] else sessions.values.firstOrNull()
     }
 
+    fun isAndroidRootSession(sessionId: String): Boolean =
+        sessionUsers[sessionId] == DroidspacesConstants.ANDROID_ROOT_USER ||
+            sessionContainers[sessionId] == DroidspacesConstants.ANDROID_CONTAINER_NAME
+
     private fun buildSessionEnv(user: String): Array<String> {
         val env = mutableListOf(
             "TERM=xterm-256color",
@@ -46,6 +50,24 @@ object DroidspacesTerminalSessionManager {
             "LANG=C.UTF-8",
             "HOME=${if (user == "root") "/root" else "/home/$user"}",
             "PATH=${DroidspacesConstants.INSTALL_PATH}:/sbin:/system/bin:/system/xbin:${System.getenv("PATH") ?: ""}",
+        )
+        System.getenv("EXTERNAL_STORAGE")?.let { env.add("EXTERNAL_STORAGE=$it") }
+        listOf(
+            "ANDROID_ART_ROOT", "ANDROID_DATA", "ANDROID_I18N_ROOT",
+            "ANDROID_ROOT", "ANDROID_RUNTIME_ROOT", "ANDROID_TZDATA_ROOT",
+        ).forEach { key ->
+            System.getenv(key)?.let { env.add("$key=$it") }
+        }
+        return env.toTypedArray()
+    }
+
+    private fun buildAndroidRootEnv(): Array<String> {
+        val env = mutableListOf(
+            "TERM=xterm-256color",
+            "COLORTERM=truecolor",
+            "LANG=C.UTF-8",
+            "HOME=/sdcard",
+            "PATH=/sbin:/system/bin:/system/xbin:${DroidspacesConstants.INSTALL_PATH}:${System.getenv("PATH") ?: ""}",
         )
         System.getenv("EXTERNAL_STORAGE")?.let { env.add("EXTERNAL_STORAGE=$it") }
         listOf(
@@ -65,6 +87,8 @@ object DroidspacesTerminalSessionManager {
         user: String? = null,
         initialCommand: String? = null,
     ): TerminalSession {
+        val isAndroidRoot = user == DroidspacesConstants.ANDROID_ROOT_USER || containerName == DroidspacesConstants.ANDROID_CONTAINER_NAME
+
         val id = requestedId ?: if (sessions.isNotEmpty()) {
             if (currentSessionId.value.isNotEmpty() && sessions.containsKey(currentSessionId.value)) {
                 currentSessionId.value
@@ -72,7 +96,7 @@ object DroidspacesTerminalSessionManager {
                 sessions.keys.first()
             }
         } else {
-            "main #1"
+            if (isAndroidRoot) "Android Root #1" else "main #1"
         }
 
         sessions[id]?.let { existingSession ->
@@ -81,22 +105,41 @@ object DroidspacesTerminalSessionManager {
             return existingSession
         }
 
-        val effectiveContainer = containerName ?: Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
-        val effectiveUser = user ?: Settings.droidspaces_terminal_default_user.ifBlank { "root" }
+        val effectiveContainer = if (isAndroidRoot) {
+            DroidspacesConstants.ANDROID_CONTAINER_NAME
+        } else {
+            containerName ?: Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
+        }
+        val effectiveUser = if (isAndroidRoot) {
+            DroidspacesConstants.ANDROID_ROOT_USER
+        } else {
+            user ?: Settings.droidspaces_terminal_default_user.ifBlank { "root" }
+        }
 
-        val bin = DroidspacesManager.getDroidspacesBinary()
-        val escapedName = effectiveContainer.replace("'", "'\\''")
-        val userArg = if (effectiveUser.isNotBlank()) " $effectiveUser" else ""
-        val shArg = "su -c '$bin --name=\"$escapedName\" enter$userArg'"
+        val session = if (isAndroidRoot) {
+            TerminalSession(
+                "/system/bin/sh",
+                "/sdcard",
+                arrayOf("/system/bin/sh", "-c", "su || /system/bin/sh"),
+                buildAndroidRootEnv(),
+                Settings.terminal_scrollback_buffer,
+                client,
+            )
+        } else {
+            val bin = DroidspacesManager.getDroidspacesBinary()
+            val escapedName = effectiveContainer.replace("'", "'\\''")
+            val userArg = if (effectiveUser.isNotBlank()) " $effectiveUser" else ""
+            val shArg = "su -c '$bin --name=\"$escapedName\" enter$userArg'"
 
-        val session = TerminalSession(
-            "/system/bin/sh",
-            "/sdcard",
-            arrayOf("/system/bin/sh", "-c", shArg),
-            buildSessionEnv(effectiveUser),
-            Settings.terminal_scrollback_buffer,
-            client,
-        )
+            TerminalSession(
+                "/system/bin/sh",
+                "/sdcard",
+                arrayOf("/system/bin/sh", "-c", shArg),
+                buildSessionEnv(effectiveUser),
+                Settings.terminal_scrollback_buffer,
+                client,
+            )
+        }
 
         sessions[id] = session
         sessionUsers[id] = effectiveUser
@@ -121,29 +164,51 @@ object DroidspacesTerminalSessionManager {
         user: String? = null,
         initialCommand: String? = null,
     ): TerminalSession {
-        val effectiveContainer = containerName ?: Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
-        val effectiveUser = user ?: Settings.droidspaces_terminal_default_user.ifBlank { "root" }
+        val isAndroidRoot = user == DroidspacesConstants.ANDROID_ROOT_USER || containerName == DroidspacesConstants.ANDROID_CONTAINER_NAME
 
-        var index = 1
-        var newId = "$effectiveUser #$index"
-        while (sessions.containsKey(newId)) {
-            index++
-            newId = "$effectiveUser #$index"
+        val effectiveContainer = if (isAndroidRoot) {
+            DroidspacesConstants.ANDROID_CONTAINER_NAME
+        } else {
+            containerName ?: Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
+        }
+        val effectiveUser = if (isAndroidRoot) {
+            DroidspacesConstants.ANDROID_ROOT_USER
+        } else {
+            user ?: Settings.droidspaces_terminal_default_user.ifBlank { "root" }
         }
 
-        val bin = DroidspacesManager.getDroidspacesBinary()
-        val escapedName = effectiveContainer.replace("'", "'\\''")
-        val userArg = if (effectiveUser.isNotBlank()) " $effectiveUser" else ""
-        val shArg = "su -c '$bin --name=\"$escapedName\" enter$userArg'"
+        val prefix = if (isAndroidRoot) "Android Root" else effectiveUser
+        var index = 1
+        var newId = "$prefix #$index"
+        while (sessions.containsKey(newId)) {
+            index++
+            newId = "$prefix #$index"
+        }
 
-        val session = TerminalSession(
-            "/system/bin/sh",
-            "/sdcard",
-            arrayOf("/system/bin/sh", "-c", shArg),
-            buildSessionEnv(effectiveUser),
-            Settings.terminal_scrollback_buffer,
-            client,
-        )
+        val session = if (isAndroidRoot) {
+            TerminalSession(
+                "/system/bin/sh",
+                "/sdcard",
+                arrayOf("/system/bin/sh", "-c", "su || /system/bin/sh"),
+                buildAndroidRootEnv(),
+                Settings.terminal_scrollback_buffer,
+                client,
+            )
+        } else {
+            val bin = DroidspacesManager.getDroidspacesBinary()
+            val escapedName = effectiveContainer.replace("'", "'\\''")
+            val userArg = if (effectiveUser.isNotBlank()) " $effectiveUser" else ""
+            val shArg = "su -c '$bin --name=\"$escapedName\" enter$userArg'"
+
+            TerminalSession(
+                "/system/bin/sh",
+                "/sdcard",
+                arrayOf("/system/bin/sh", "-c", shArg),
+                buildSessionEnv(effectiveUser),
+                Settings.terminal_scrollback_buffer,
+                client,
+            )
+        }
 
         sessions[newId] = session
         sessionUsers[newId] = effectiveUser

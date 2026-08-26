@@ -112,9 +112,10 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
                 onClick = { showContainerNameDialog = true },
             )
 
-            // Terminal Default User Dropdown (Always ask, root, auto-detected users)
+            // Terminal Default User Dropdown (Always ask, Android root, container root, auto-detected users)
             val terminalUserItems = mutableListOf(
                 "" to strings.ask_every_time.getString(),
+                DroidspacesConstants.ANDROID_ROOT_USER to strings.android_root_shell.getString(),
                 "root" to strings.root_user.getString(),
             )
             containerUsers.filter { !it.isRoot }.forEach { u ->
@@ -127,6 +128,7 @@ fun SettingsTerminalScreen(overrideNavController: NavController? = null) {
 
             val terminalUserDescription = when {
                 defaultTerminalUser.isBlank() -> strings.ask_every_time.getString()
+                defaultTerminalUser == DroidspacesConstants.ANDROID_ROOT_USER -> strings.android_root_shell.getString()
                 defaultTerminalUser == "root" -> strings.root_user.getString()
                 else -> defaultTerminalUser
             }

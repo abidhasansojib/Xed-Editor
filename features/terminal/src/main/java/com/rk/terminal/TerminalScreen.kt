@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -65,6 +66,7 @@ import com.rk.droidspaces.DroidspacesConstants
 import com.rk.droidspaces.DroidspacesManager
 import com.rk.droidspaces.SelectUserSheet
 import com.rk.editor.FontCache
+import com.rk.resources.drawables
 import com.rk.resources.getString
 import com.rk.resources.strings
 import com.rk.settings.Settings
@@ -108,57 +110,21 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
 
     fun launchUserSelectionOrSession(isNewTab: Boolean) {
         val defaultUser = Settings.droidspaces_terminal_default_user.trim()
-        if (defaultUser.isNotEmpty()) {
+        if (defaultUser.isNotEmpty() && !isNewTab) {
             val client = TerminalBackEnd()
-            if (isNewTab) {
-                DroidspacesTerminalSessionManager.createNewTabSession(
-                    context = context,
-                    client = client,
-                    containerName = containerName,
-                    user = defaultUser,
-                )
-                terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
-            } else {
-                DroidspacesTerminalSessionManager.getOrCreateSession(
-                    context = context,
-                    client = client,
-                    containerName = containerName,
-                    user = defaultUser,
-                    initialCommand = initialCommand,
-                )
-                isTerminalReady = true
-                terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
-            }
+            val isAndroidRoot = defaultUser == DroidspacesConstants.ANDROID_ROOT_USER
+            DroidspacesTerminalSessionManager.getOrCreateSession(
+                context = context,
+                client = client,
+                containerName = if (isAndroidRoot) DroidspacesConstants.ANDROID_CONTAINER_NAME else containerName,
+                user = defaultUser,
+                initialCommand = initialCommand,
+            )
+            isTerminalReady = true
+            terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
         } else {
-            scope.launch {
-                val users = DroidspacesManager.getContainerUsers(containerName, useCache = false)
-                if (users.size <= 1) {
-                    val singleUser = users.firstOrNull()?.username ?: "root"
-                    val client = TerminalBackEnd()
-                    if (isNewTab) {
-                        DroidspacesTerminalSessionManager.createNewTabSession(
-                            context = context,
-                            client = client,
-                            containerName = containerName,
-                            user = singleUser,
-                        )
-                        terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
-                    } else {
-                        DroidspacesTerminalSessionManager.getOrCreateSession(
-                            context = context,
-                            client = client,
-                            containerName = containerName,
-                            user = singleUser,
-                            initialCommand = initialCommand,
-                        )
-                        isTerminalReady = true
-                        terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
-                    }
-                } else {
-                    isCreatingNewTab = isNewTab
-                    showUserPicker = true
-                }
-            }
+            isCreatingNewTab = isNewTab
+            showUserPicker = true
         }
     }
 
@@ -180,6 +146,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
         SelectUserSheet(
             containerName = containerName,
             title = stringResource(strings.select_terminal_user),
+            includeAndroidRoot = true,
             onDismiss = {
                 showUserPicker = false
                 if (!isTerminalReady && !DroidspacesTerminalSessionManager.hasActiveSessions()) {
@@ -189,11 +156,13 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
             onUserSelected = { username ->
                 showUserPicker = false
                 val client = TerminalBackEnd()
+                val isAndroidRoot = username == DroidspacesConstants.ANDROID_ROOT_USER
+                val targetContainer = if (isAndroidRoot) DroidspacesConstants.ANDROID_CONTAINER_NAME else containerName
                 if (isCreatingNewTab) {
                     DroidspacesTerminalSessionManager.createNewTabSession(
                         context = context,
                         client = client,
-                        containerName = containerName,
+                        containerName = targetContainer,
                         user = username,
                     )
                     terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
@@ -201,7 +170,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                     DroidspacesTerminalSessionManager.getOrCreateSession(
                         context = context,
                         client = client,
-                        containerName = containerName,
+                        containerName = targetContainer,
                         user = username,
                         initialCommand = initialCommand,
                     )
@@ -242,6 +211,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = false,
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -285,8 +255,22 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                         LazyColumn {
                             items(sessionList) { sessionId ->
                                 val isSelected = sessionId == currentSessionId
+                                val isAndroidRoot = DroidspacesTerminalSessionManager.isAndroidRootSession(sessionId)
                                 NavigationDrawerItem(
-                                    label = { Text(text = sessionId) },
+                                    label = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(if (isAndroidRoot) drawables.android else drawables.terminal),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (isAndroidRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                            Text(text = sessionId)
+                                        }
+                                    },
                                     selected = isSelected,
                                     onClick = {
                                         terminalActivity.changeSession(sessionId)
@@ -352,10 +336,27 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = if (currentSessionId.isNotEmpty()) "$containerName: $currentSessionId"
-                            else stringResource(strings.droidspaces_terminal),
-                        )
+                        val isAndroidRoot = DroidspacesTerminalSessionManager.isAndroidRootSession(currentSessionId)
+                        val titleText = if (currentSessionId.isNotEmpty()) {
+                            if (isAndroidRoot) {
+                                val rootSessions = sessionList.filter { DroidspacesTerminalSessionManager.isAndroidRootSession(it) }
+                                if (rootSessions.size > 1) {
+                                    val index = currentSessionId.substringAfterLast('#', "").trim()
+                                    if (index.isNotEmpty()) {
+                                        "${stringResource(strings.android_root_shell)} #$index"
+                                    } else {
+                                        stringResource(strings.android_root_shell)
+                                    }
+                                } else {
+                                    stringResource(strings.android_root_shell)
+                                }
+                            } else {
+                                "$containerName: $currentSessionId"
+                            }
+                        } else {
+                            stringResource(strings.droidspaces_terminal)
+                        }
+                        Text(text = titleText)
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
@@ -400,11 +401,15 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                             factory = { ctx ->
                                 TerminalView(ctx, null).apply {
                                     val client = TerminalBackEnd()
+                                    val isAndroidRoot = DroidspacesTerminalSessionManager.isAndroidRootSession(currentSessionId)
+                                    val targetContainer = if (isAndroidRoot) DroidspacesConstants.ANDROID_CONTAINER_NAME else containerName
+                                    val targetUser = if (isAndroidRoot) DroidspacesConstants.ANDROID_ROOT_USER else null
                                     val session = DroidspacesTerminalSessionManager.getCurrentSession()
                                         ?: DroidspacesTerminalSessionManager.getOrCreateSession(
                                             context = ctx,
                                             client = client,
-                                            containerName = containerName,
+                                            containerName = targetContainer,
+                                            user = targetUser,
                                             initialCommand = initialCommand,
                                         )
 

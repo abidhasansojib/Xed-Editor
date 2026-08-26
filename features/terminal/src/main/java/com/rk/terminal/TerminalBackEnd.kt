@@ -91,23 +91,30 @@ class TerminalBackEnd : TerminalSessionClient, TerminalViewClient {
     }
 
     override fun onScale(scale: Float): Float {
-        // Pinch zoom step scaling for terminal font size
-        if (scale < 0.92f || scale > 1.08f) {
-            val increase = scale > 1.0f
-            val currentSize = Settings.terminal_font_size
-            val newSize = if (increase) {
-                (currentSize + 1).coerceAtMost(48)
-            } else {
-                (currentSize - 1).coerceAtLeast(8)
-            }
-            if (newSize != currentSize) {
-                Settings.terminal_font_size = newSize
-                val activity = Terminal.instance
-                activity?.terminalView?.get()?.setTextSize(newSize)
-            }
-            return 1.0f
+        var currentScale = scale
+        val stepUp = 1.045f
+        val stepDown = 1.0f / stepUp
+
+        val currentSize = Settings.terminal_font_size
+        var newSize = currentSize
+
+        while (currentScale >= stepUp) {
+            newSize = (newSize + 1).coerceAtMost(48)
+            currentScale /= stepUp
         }
-        return scale
+
+        while (currentScale <= stepDown) {
+            newSize = (newSize - 1).coerceAtLeast(8)
+            currentScale /= stepDown
+        }
+
+        if (newSize != currentSize) {
+            Settings.terminal_font_size = newSize
+            val activity = Terminal.instance
+            activity?.terminalView?.get()?.setTextSize(newSize)
+        }
+
+        return currentScale
     }
 
     override fun onSingleTapUp(e: MotionEvent) {

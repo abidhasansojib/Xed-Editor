@@ -1,6 +1,7 @@
 package com.termux.view;
 
 import android.content.Context;
+import android.os.SystemClock;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -30,6 +31,7 @@ final class GestureAndScaleRecognizer {
     private final ScaleGestureDetector mScaleDetector;
     final Listener mListener;
     boolean isAfterLongPress;
+    private long mLastScaleEndTime;
 
     public GestureAndScaleRecognizer(Context context, Listener listener) {
         mListener = listener;
@@ -37,11 +39,17 @@ final class GestureAndScaleRecognizer {
         mGestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onScroll(MotionEvent e1, MotionEvent e2, float dx, float dy) {
+                if (isScaling() || (e2 != null && e2.getPointerCount() > 1) || (e1 != null && e1.getPointerCount() > 1)) {
+                    return true;
+                }
                 return mListener.onScroll(e2, dx, dy);
             }
 
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (isScaling() || (e2 != null && e2.getPointerCount() > 1) || (e1 != null && e1.getPointerCount() > 1)) {
+                    return true;
+                }
                 return mListener.onFling(e2, velocityX, velocityY);
             }
 
@@ -52,6 +60,7 @@ final class GestureAndScaleRecognizer {
 
             @Override
             public void onLongPress(MotionEvent e) {
+                if (isScaling() || (e != null && e.getPointerCount() > 1)) return;
                 mListener.onLongPress(e);
                 isAfterLongPress = true;
             }
@@ -60,6 +69,7 @@ final class GestureAndScaleRecognizer {
         mGestureDetector.setOnDoubleTapListener(new GestureDetector.OnDoubleTapListener() {
             @Override
             public boolean onSingleTapConfirmed(MotionEvent e) {
+                if (isScaling() || (e != null && e.getPointerCount() > 1)) return true;
                 return mListener.onSingleTapUp(e);
             }
 
@@ -84,29 +94,41 @@ final class GestureAndScaleRecognizer {
             public boolean onScale(ScaleGestureDetector detector) {
                 return mListener.onScale(detector.getFocusX(), detector.getFocusY(), detector.getScaleFactor());
             }
+
+            @Override
+            public void onScaleEnd(ScaleGestureDetector detector) {
+                mLastScaleEndTime = SystemClock.uptimeMillis();
+            }
         });
         mScaleDetector.setQuickScaleEnabled(false);
     }
 
     public void onTouchEvent(MotionEvent event) {
-        mGestureDetector.onTouchEvent(event);
         mScaleDetector.onTouchEvent(event);
-        switch (event.getAction()) {
+        mGestureDetector.onTouchEvent(event);
+        switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 isAfterLongPress = false;
                 break;
             case MotionEvent.ACTION_UP:
-                if (!isAfterLongPress) {
+                if (!isAfterLongPress && !isScaling()) {
                     // This behaviour is desired when in e.g. vim with mouse events, where we do not
                     // want to move the cursor when lifting finger after a long press.
                     mListener.onUp(event);
                 }
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                mListener.onUp(event);
                 break;
         }
     }
 
     public boolean isInProgress() {
         return mScaleDetector.isInProgress();
+    }
+
+    public boolean isScaling() {
+        return mScaleDetector.isInProgress() || (SystemClock.uptimeMillis() - mLastScaleEndTime < 250);
     }
 
 }
