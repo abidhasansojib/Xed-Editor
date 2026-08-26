@@ -2,6 +2,7 @@ package com.rk.editor
 
 import com.rk.utils.application
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
+import io.github.rosemoe.sora.langs.textmate.XedTextMateLanguage
 import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
@@ -26,7 +27,7 @@ object LanguageManager {
 
     suspend fun createLanguage(textmateScope: String, createIdentifiers: Boolean = true): TextMateLanguage {
         grammarRegistryInitialized.await()
-        return TextMateLanguage.create(textmateScope, createIdentifiers)
+        return XedTextMateLanguage.create(textmateScope, collectIdentifiers = createIdentifiers)
     }
 
     fun createLanguageBlocking(textmateScope: String, createIdentifiers: Boolean = true): TextMateLanguage =
