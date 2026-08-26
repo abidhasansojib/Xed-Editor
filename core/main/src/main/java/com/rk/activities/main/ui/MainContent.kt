@@ -148,33 +148,61 @@ fun MainContent(
                                 tabState = tabState,
                                 index = index,
                                 showIcon = Settings.show_tab_icons,
-                                onCloseThis = {
-                                    if (tabState is EditorTab && tabState.editorState.isDirty) {
-                                        dialogRes(
+                                onCloseThis = { targetIndex ->
+                                    val targetTab = mainViewModel.tabs.getOrNull(targetIndex) ?: tabState
+                                    if (targetTab is EditorTab && targetTab.editorState.isDirty) {
+                                        unsavedChangesDialog(
+                                            activity = (context as? MainActivity) ?: MainActivity.instance,
                                             title = strings.file_unsaved.getString(),
                                             msg = strings.ask_unsaved.getString(),
-                                            onOk = { mainViewModel.tabManager.removeTab(tabState) },
+                                            onSave = {
+                                                scope.launch {
+                                                    try {
+                                                        targetTab.save()
+                                                    } catch (e: Exception) {
+                                                        toast(e.message ?: "Failed to save file")
+                                                    }
+                                                    mainViewModel.tabManager.removeTab(targetTab)
+                                                }
+                                            },
+                                            onDiscard = {
+                                                mainViewModel.tabManager.removeTab(targetTab)
+                                            },
                                             onCancel = {},
-                                            okRes = strings.discard,
                                         )
                                     } else {
-                                        mainViewModel.tabManager.removeTab(tabState)
+                                        mainViewModel.tabManager.removeTab(targetTab)
                                     }
                                 },
-                                onCloseOthers = { index ->
-                                    mainViewModel.tabManager.setCurrentTab(index)
+                                onCloseOthers = { targetIndex ->
+                                    mainViewModel.tabManager.setCurrentTab(targetIndex)
 
                                     val unsavedOtherTabs =
                                         mainViewModel.tabs.filterIndexed { tabIndex, tab ->
-                                            tabIndex != index && (tab as? EditorTab)?.editorState?.isDirty == true
-                                        }
+                                            tabIndex != targetIndex && (tab as? EditorTab)?.editorState?.isDirty == true
+                                        }.filterIsInstance<EditorTab>()
+
                                     if (unsavedOtherTabs.isNotEmpty()) {
-                                        dialogRes(
+                                        unsavedChangesDialog(
+                                            activity = (context as? MainActivity) ?: MainActivity.instance,
                                             title = strings.files_unsaved.getString(),
                                             msg = strings.ask_multiple_unsaved.getString(),
-                                            onOk = { mainViewModel.tabManager.removeOtherTabs() },
+                                            onSave = {
+                                                scope.launch {
+                                                    unsavedOtherTabs.forEach { tab ->
+                                                        try {
+                                                            tab.save()
+                                                        } catch (e: Exception) {
+                                                            toast(e.message ?: "Failed to save file")
+                                                        }
+                                                    }
+                                                    mainViewModel.tabManager.removeOtherTabs()
+                                                }
+                                            },
+                                            onDiscard = {
+                                                mainViewModel.tabManager.removeOtherTabs()
+                                            },
                                             onCancel = {},
-                                            okRes = strings.discard,
                                         )
                                     } else {
                                         mainViewModel.tabManager.removeOtherTabs()
@@ -184,14 +212,29 @@ fun MainContent(
                                     val unsavedTabs =
                                         mainViewModel.tabs.filter { tab ->
                                             (tab as? EditorTab)?.editorState?.isDirty == true
-                                        }
+                                        }.filterIsInstance<EditorTab>()
+
                                     if (unsavedTabs.isNotEmpty()) {
-                                        dialogRes(
+                                        unsavedChangesDialog(
+                                            activity = (context as? MainActivity) ?: MainActivity.instance,
                                             title = strings.files_unsaved.getString(),
                                             msg = strings.ask_multiple_unsaved.getString(),
-                                            onOk = { mainViewModel.tabManager.removeAllTabs() },
+                                            onSave = {
+                                                scope.launch {
+                                                    unsavedTabs.forEach { tab ->
+                                                        try {
+                                                            tab.save()
+                                                        } catch (e: Exception) {
+                                                            toast(e.message ?: "Failed to save file")
+                                                        }
+                                                    }
+                                                    mainViewModel.tabManager.removeAllTabs()
+                                                }
+                                            },
+                                            onDiscard = {
+                                                mainViewModel.tabManager.removeAllTabs()
+                                            },
                                             onCancel = {},
-                                            okRes = strings.discard,
                                         )
                                     } else {
                                         mainViewModel.tabManager.removeAllTabs()

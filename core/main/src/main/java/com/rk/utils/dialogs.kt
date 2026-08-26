@@ -98,7 +98,7 @@ var isDialogShowing = false
     private set
 
 fun dialogRes(
-    activity: Activity? = ActivityProvider.currentActivity,
+    activity: Activity? = ActivityProvider.currentActivity ?: MainActivity.instance,
     title: String? = null,
     msg: String,
     @StringRes cancelRes: Int = strings.cancel,
@@ -121,7 +121,7 @@ fun dialogRes(
 
 @XedExtensionPoint
 fun dialog(
-    activity: Activity? = ActivityProvider.currentActivity,
+    activity: Activity? = ActivityProvider.currentActivity ?: MainActivity.instance,
     title: String? = null,
     msg: String,
     cancelText: String = strings.cancel.getString(),
@@ -130,17 +130,18 @@ fun dialog(
     onCancel: ((AlertDialog?) -> Unit)? = null,
     cancelable: Boolean = true,
 ) {
-    if (activity == null) {
+    val act = activity ?: ActivityProvider.currentActivity ?: MainActivity.instance
+    if (act == null) {
         toast(strings.unknown_error)
         return
     }
     var alertDialog: AlertDialog? = null
     runOnUiThread {
-        MaterialAlertDialogBuilder(activity).apply {
+        MaterialAlertDialogBuilder(act).apply {
             setOnCancelListener { isDialogShowing = false }
 
             setView(
-                ComposeView(activity).apply {
+                ComposeView(act).apply {
                     setContent {
                         XedTheme {
                             Surface(shape = MaterialTheme.shapes.large, tonalElevation = 1.dp) {
@@ -165,8 +166,111 @@ fun dialog(
                 }
             )
 
-            if (activity.isFinishing || activity.isDestroyed) {
+            if (act.isFinishing || act.isDestroyed) {
                 toast(msg)
+                return@runOnUiThread
+            }
+
+            alertDialog = show()
+            isDialogShowing = true
+        }
+    }
+}
+
+fun unsavedChangesDialog(
+    activity: Activity? = ActivityProvider.currentActivity ?: MainActivity.instance,
+    title: String = strings.file_unsaved.getString(),
+    msg: String = strings.ask_unsaved.getString(),
+    saveString: String = strings.save.getString(),
+    discardString: String = strings.discard.getString(),
+    cancelString: String = strings.cancel.getString(),
+    onSave: () -> Unit,
+    onDiscard: () -> Unit,
+    onCancel: (() -> Unit)? = null,
+) {
+    val act = activity ?: ActivityProvider.currentActivity ?: MainActivity.instance
+    if (act == null) {
+        // Fallback: discard safely so tab isn't permanently stuck
+        onDiscard()
+        return
+    }
+
+    var alertDialog: AlertDialog? = null
+    runOnUiThread {
+        MaterialAlertDialogBuilder(act).apply {
+            setOnCancelListener {
+                isDialogShowing = false
+                onCancel?.invoke()
+            }
+
+            setView(
+                ComposeView(act).apply {
+                    setContent {
+                        XedTheme {
+                            Surface(shape = MaterialTheme.shapes.large, tonalElevation = 1.dp) {
+                                alertDialog?.setCancelable(true)
+                                Column(modifier = Modifier.padding(24.dp)) {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        modifier = Modifier.padding(bottom = 16.dp),
+                                    )
+
+                                    Column(
+                                        modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                                    ) {
+                                        Text(
+                                            text = msg,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.padding(bottom = 24.dp),
+                                        )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        TextButton(
+                                            onClick = {
+                                                alertDialog?.dismiss()
+                                                onCancel?.invoke()
+                                            }
+                                        ) {
+                                            Text(cancelString)
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        TextButton(
+                                            onClick = {
+                                                alertDialog?.dismiss()
+                                                onDiscard()
+                                            }
+                                        ) {
+                                            Text(discardString)
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        TextButton(
+                                            onClick = {
+                                                alertDialog?.dismiss()
+                                                onSave()
+                                            }
+                                        ) {
+                                            Text(saveString)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+
+            if (act.isFinishing || act.isDestroyed) {
+                onDiscard()
                 return@runOnUiThread
             }
 
