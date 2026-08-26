@@ -39,7 +39,7 @@ class XedTextMateLanguage(
             textMateAnalyzer.syncIdentifiers
         } else null
 
-        val keywords = activeKeywords ?: KeywordManager.getKeywordsArray(textmateScope)
+        val keywords = activeKeywords ?: KeywordManager.getKeywordsArrayDirect(textmateScope)
 
         SnippetManager.provideCompletions(
             scope = textmateScope,

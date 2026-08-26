@@ -181,14 +181,8 @@ object KeywordManager {
     /**
      * Returns pre-indexed, zero-allocation cached array of keywords for the given TextMate scope.
      */
-    suspend fun getKeywordsArray(textmateScope: String): Array<String>? {
+    fun getKeywordsArrayDirect(textmateScope: String): Array<String>? {
         cachedMergedKeywords[textmateScope]?.let { return it }
-
-        if (!keywordRegistryInitialized.isCompleted) {
-            try {
-                keywordRegistryInitialized.await()
-            } catch (_: Exception) {}
-        }
 
         // Fast-path lookup
         val set = LinkedHashSet<String>()
@@ -213,6 +207,18 @@ object KeywordManager {
         val array = set.toTypedArray()
         cachedMergedKeywords[textmateScope] = array
         return array
+    }
+
+    suspend fun getKeywordsArray(textmateScope: String): Array<String>? {
+        cachedMergedKeywords[textmateScope]?.let { return it }
+
+        if (!keywordRegistryInitialized.isCompleted) {
+            try {
+                keywordRegistryInitialized.await()
+            } catch (_: Exception) {}
+        }
+
+        return getKeywordsArrayDirect(textmateScope)
     }
 
     suspend fun getKeywords(textmateScope: String): List<String>? {

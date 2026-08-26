@@ -4,7 +4,7 @@ import com.rk.editor.KeywordManager
 import io.github.rosemoe.sora.lang.completion.CompletionItem
 import io.github.rosemoe.sora.lang.completion.CompletionItemKind
 import io.github.rosemoe.sora.lang.completion.CompletionPublisher
-import io.github.rosemoe.sora.lang.completion.Identifiers
+import io.github.rosemoe.sora.lang.completion.IdentifierAutoComplete.Identifiers
 import io.github.rosemoe.sora.lang.completion.SimpleCompletionItem
 import io.github.rosemoe.sora.lang.completion.SimpleSnippetCompletionItem
 import io.github.rosemoe.sora.lang.completion.SnippetDescription
@@ -90,6 +90,57 @@ object SnippetManager {
         return line.substring(start + 1, col)
     }
 
+    fun parseDynamicEmmet(prefix: String, scope: String): Snippet? {
+        val normalized = scope.lowercase()
+        if (!normalized.contains("html") && !normalized.contains("xml") && !normalized.contains("htm")) {
+            return null
+        }
+        if (prefix.isBlank() || prefix.length < 2) return null
+
+        // 1. .class or #id (e.g. .container -> <div class="container">$0</div>)
+        if (prefix.startsWith(".")) {
+            val cls = prefix.removePrefix(".")
+            if (cls.isNotEmpty() && cls.all { it.isLetterOrDigit() || it == '-' || it == '_' }) {
+                return Snippet(prefix, prefix, "Emmet: <div class=\"$cls\">", "<div class=\"$cls\">$0</div>", "Emmet")
+            }
+        }
+        if (prefix.startsWith("#")) {
+            val id = prefix.removePrefix("#")
+            if (id.isNotEmpty() && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }) {
+                return Snippet(prefix, prefix, "Emmet: <div id=\"$id\">", "<div id=\"$id\">$0</div>", "Emmet")
+            }
+        }
+
+        // 2. tag.class or tag#id (e.g. div.card -> <div class="card">$0</div>)
+        if (prefix.contains(".")) {
+            val tag = prefix.substringBefore(".")
+            val cls = prefix.substringAfter(".")
+            if (tag.isNotEmpty() && cls.isNotEmpty() &&
+                tag.all { it.isLetterOrDigit() || it == '-' } &&
+                cls.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+            ) {
+                return Snippet(prefix, prefix, "Emmet: <$tag class=\"$cls\">", "<$tag class=\"$cls\">$0</$tag>", "Emmet")
+            }
+        }
+        if (prefix.contains("#")) {
+            val tag = prefix.substringBefore("#")
+            val id = prefix.substringAfter("#")
+            if (tag.isNotEmpty() && id.isNotEmpty() &&
+                tag.all { it.isLetterOrDigit() || it == '-' } &&
+                id.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+            ) {
+                return Snippet(prefix, prefix, "Emmet: <$tag id=\"$id\">", "<$tag id=\"$id\">$0</$tag>", "Emmet")
+            }
+        }
+
+        // 3. Any arbitrary tag (e.g. dialog -> <dialog>$0</dialog>)
+        if (prefix.length >= 2 && prefix.all { it.isLetterOrDigit() || it == '-' }) {
+            return Snippet(prefix, prefix, "Emmet: <$prefix>", "<$prefix>$0</$prefix>", "Emmet")
+        }
+
+        return null
+    }
+
     fun provideCompletions(
         scope: String,
         content: ContentReference,
@@ -108,8 +159,9 @@ object SnippetManager {
 
         // 1. Snippets (highest ranking & priority)
         val snippets = getSnippetsForScope(scope)
+        val prefixToMatch = rawPrefix.ifEmpty { idPrefix }.lowercase()
+
         if (snippets.isNotEmpty()) {
-            val prefixToMatch = rawPrefix.ifEmpty { idPrefix }.lowercase()
             for (snip in snippets) {
                 val triggerLower = snip.trigger.lowercase()
                 val labelLower = snip.label.lowercase()
@@ -136,6 +188,20 @@ object SnippetManager {
                     seenLabels.add(snip.label.lowercase())
                 }
             }
+        }
+
+        // 1.5 Dynamic Emmet expansion (e.g. div.card -> <div class="card">$0</div> or #hero -> <div id="hero">$0</div>)
+        val dynamicEmmet = parseDynamicEmmet(rawPrefix.ifEmpty { idPrefix }, scope)
+        if (dynamicEmmet != null && !seenLabels.contains(dynamicEmmet.label.lowercase())) {
+            val prefixLen = rawPrefix.ifEmpty { idPrefix }.length
+            val snippetDesc = SnippetDescription(prefixLen, dynamicEmmet.parsedCodeSnippet, true)
+            val item = SimpleSnippetCompletionItem(dynamicEmmet.label, dynamicEmmet.description, snippetDesc).apply {
+                kind(CompletionItemKind.Snippet)
+                this.detail = "Emmet"
+                this.sortText = "01_${dynamicEmmet.trigger}"
+            }
+            items.add(item)
+            seenLabels.add(dynamicEmmet.label.lowercase())
         }
 
         // 2. Keywords
