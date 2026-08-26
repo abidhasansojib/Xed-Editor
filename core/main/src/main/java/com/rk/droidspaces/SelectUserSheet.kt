@@ -50,8 +50,7 @@ fun SelectUserSheet(
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(containerName) {
-        isLoading = true
-        val fetchedUsers = DroidspacesManager.getContainerUsers(containerName, useCache = false)
+        val fetchedUsers = DroidspacesManager.getContainerUsers(containerName, useCache = true)
         users = fetchedUsers
         isLoading = false
     }

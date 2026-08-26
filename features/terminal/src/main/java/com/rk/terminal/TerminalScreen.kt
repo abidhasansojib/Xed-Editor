@@ -489,7 +489,10 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                             val view = terminalActivity.terminalView.get()
                             val session = view?.mTermSession ?: DroidspacesTerminalSessionManager.getCurrentSession()
                             if (session != null) {
-                                vkv.virtualKeysViewClient = VirtualKeysListener(session)
+                                val currentListener = vkv.virtualKeysViewClient as? VirtualKeysListener
+                                if (currentListener == null || currentListener.session != session) {
+                                    vkv.virtualKeysViewClient = VirtualKeysListener(session)
+                                }
                             }
                             vkv.setButtonColors(
                                 onSurfaceColor,
@@ -506,12 +509,19 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
 }
 
 private fun TerminalView.applyTerminalColors(onSurfaceColor: Int, surfaceColor: Int) {
-    onScreenUpdated()
-    mEmulator?.mColors?.reset()
-    mEmulator?.mColors?.mCurrentColors?.apply {
-        set(TextStyle.COLOR_INDEX_FOREGROUND, onSurfaceColor)
-        set(TextStyle.COLOR_INDEX_BACKGROUND, surfaceColor)
-        set(TextStyle.COLOR_INDEX_CURSOR, onSurfaceColor)
+    val emulator = mEmulator ?: return
+    val colors = emulator.mColors ?: return
+    val currentColors = colors.mCurrentColors ?: return
+    val curFg = currentColors.getOrNull(TextStyle.COLOR_INDEX_FOREGROUND)
+    val curBg = currentColors.getOrNull(TextStyle.COLOR_INDEX_BACKGROUND)
+    val curCursor = currentColors.getOrNull(TextStyle.COLOR_INDEX_CURSOR)
+    if (curFg == onSurfaceColor && curBg == surfaceColor && curCursor == onSurfaceColor) {
+        return
     }
+    colors.reset()
+    currentColors[TextStyle.COLOR_INDEX_FOREGROUND] = onSurfaceColor
+    currentColors[TextStyle.COLOR_INDEX_BACKGROUND] = surfaceColor
+    currentColors[TextStyle.COLOR_INDEX_CURSOR] = onSurfaceColor
+    onScreenUpdated()
     invalidate()
 }
