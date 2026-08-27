@@ -27,9 +27,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentCut
-import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -52,7 +49,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,7 +71,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rk.activities.main.MainActivity
-import com.rk.activities.terminal.Terminal
 import com.rk.components.SingleInputDialog
 import com.rk.file.FileObject
 import com.rk.filetree.FileIcon
@@ -146,11 +141,16 @@ fun ContainerFileManagerSheet(
     }
 
     fun openTerminalAtPath(path: String) {
-        val intent = Intent(context, Terminal::class.java).apply {
-            val clean = path.trimEnd('/')
-            putExtra("initial_command", "cd '$clean' && clear")
+        try {
+            val intent = Intent().setClassName(context.packageName, "com.rk.activities.terminal.Terminal").apply {
+                val clean = path.trimEnd('/')
+                putExtra("initial_command", "cd '$clean' && clear")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            toast("Terminal activity not available")
         }
-        context.startActivity(intent)
     }
 
     suspend fun loadDirectory(path: String) {
@@ -641,7 +641,7 @@ fun ContainerFileManagerSheet(
                         modifier = Modifier.size(34.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ContentCopy,
+                            painter = painterResource(drawables.copy),
                             contentDescription = stringResource(strings.copy_path),
                             modifier = Modifier.size(18.dp),
                         )
@@ -726,7 +726,7 @@ fun ContainerFileManagerSheet(
                             }
                         },
                     ) {
-                        Icon(imageVector = Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(painter = painterResource(drawables.paste), contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(stringResource(strings.paste_here))
                     }
@@ -736,7 +736,7 @@ fun ContainerFileManagerSheet(
                 var sortMenuExpanded by remember { mutableStateOf(false) }
                 Box {
                     IconButton(onClick = { sortMenuExpanded = true }) {
-                        Icon(painter = painterResource(drawables.order), contentDescription = stringResource(strings.sort_by))
+                        Icon(painter = painterResource(drawables.filter), contentDescription = stringResource(strings.sort_by))
                     }
 
                     DropdownMenu(
@@ -782,7 +782,7 @@ fun ContainerFileManagerSheet(
                     },
                 ) {
                     Icon(
-                        painter = painterResource(drawables.checklist),
+                        imageVector = Icons.Default.Edit,
                         contentDescription = "Select Mode",
                         tint = if (isSelectMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1148,22 +1148,22 @@ private fun ContainerFileRow(
                     }
                     DropdownMenuItem(
                         text = { Text(stringResource(strings.copy_path)) },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
                         onClick = { menuExpanded = false; onCopyPath() },
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(strings.copy)) },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
                         onClick = { menuExpanded = false; onCopy() },
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(strings.cut)) },
-                        leadingIcon = { Icon(Icons.Default.ContentCut, null) },
+                        leadingIcon = { Icon(painter = painterResource(drawables.cut), null) },
                         onClick = { menuExpanded = false; onCut() },
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(strings.duplicate)) },
-                        leadingIcon = { Icon(painter = painterResource(drawables.order), null) },
+                        leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
                         onClick = { menuExpanded = false; onDuplicate() },
                     )
                     HorizontalDivider()
