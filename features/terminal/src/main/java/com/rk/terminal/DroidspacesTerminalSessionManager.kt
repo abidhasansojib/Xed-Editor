@@ -102,6 +102,9 @@ object DroidspacesTerminalSessionManager {
         sessions[id]?.let { existingSession ->
             existingSession.updateTerminalSessionClient(client)
             _currentSessionId.value = id
+            if (!initialCommand.isNullOrBlank()) {
+                runCommandInSession(id, initialCommand, delayMs = 150L)
+            }
             return existingSession
         }
 
@@ -151,7 +154,7 @@ object DroidspacesTerminalSessionManager {
         SessionService.start(context)
 
         if (!initialCommand.isNullOrBlank()) {
-            session.write(initialCommand + "\n")
+            runCommandInSession(id, initialCommand, delayMs = 400L)
         }
 
         return session
@@ -220,10 +223,43 @@ object DroidspacesTerminalSessionManager {
         SessionService.update(context)
 
         if (!initialCommand.isNullOrBlank()) {
-            session.write(initialCommand + "\n")
+            runCommandInSession(newId, initialCommand, delayMs = 400L)
         }
 
         return session
+    }
+
+    fun runCommandInSession(sessionId: String, command: String, delayMs: Long = 200L) {
+        val session = sessions[sessionId] ?: return
+        if (delayMs > 0L) {
+            Thread {
+                try {
+                    Thread.sleep(delayMs)
+                } catch (_: InterruptedException) {}
+                session.write(command + "\n")
+            }.start()
+        } else {
+            session.write(command + "\n")
+        }
+    }
+
+    fun runCommandInCurrentSession(command: String, delayMs: Long = 200L) {
+        val id = _currentSessionId.value
+        if (id.isNotEmpty()) {
+            runCommandInSession(id, command, delayMs)
+        } else {
+            val firstSession = sessions.values.firstOrNull() ?: return
+            if (delayMs > 0L) {
+                Thread {
+                    try {
+                        Thread.sleep(delayMs)
+                    } catch (_: InterruptedException) {}
+                    firstSession.write(command + "\n")
+                }.start()
+            } else {
+                firstSession.write(command + "\n")
+            }
+        }
     }
 
     fun switchSession(sessionId: String) {

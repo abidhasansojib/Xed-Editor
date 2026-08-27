@@ -43,12 +43,49 @@ class Terminal : ComponentActivity() {
         }
 
         val initialCommand = intent.getStringExtra("initial_command")
+        val container = intent.getStringExtra("container_name")
+        val user = intent.getStringExtra("user")
 
         setContent {
             XedTheme {
-                TerminalScreen(terminalActivity = this@Terminal, initialCommand = initialCommand)
+                TerminalScreen(
+                    terminalActivity = this@Terminal,
+                    initialCommand = initialCommand,
+                    initialContainer = container,
+                    initialUser = user,
+                )
             }
         }
+
+        if (!initialCommand.isNullOrBlank()) {
+            handleIncomingCommand(initialCommand, container, user)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val initialCommand = intent.getStringExtra("initial_command")
+        val container = intent.getStringExtra("container_name")
+        val user = intent.getStringExtra("user")
+        if (!initialCommand.isNullOrBlank()) {
+            handleIncomingCommand(initialCommand, container, user)
+        }
+    }
+
+    private fun handleIncomingCommand(command: String, container: String?, user: String?) {
+        val client = TerminalBackEnd()
+        val session = DroidspacesTerminalSessionManager.getOrCreateSession(
+            context = this,
+            client = client,
+            containerName = container,
+            user = user,
+            initialCommand = command,
+        )
+        changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
+        terminalView.get()?.postDelayed({
+            DroidspacesTerminalSessionManager.runCommandInCurrentSession(command, delayMs = 150L)
+        }, 250L)
     }
 
     fun changeSession(sessionId: String) {

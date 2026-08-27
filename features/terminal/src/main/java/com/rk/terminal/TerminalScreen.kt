@@ -81,7 +81,12 @@ import java.lang.ref.WeakReference
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
+fun TerminalScreen(
+    terminalActivity: Terminal,
+    initialCommand: String? = null,
+    initialContainer: String? = null,
+    initialUser: String? = null,
+) {
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -99,8 +104,8 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
     var showUserPicker by remember { mutableStateOf(false) }
     var isCreatingNewTab by remember { mutableStateOf(false) }
 
-    val containerName = remember {
-        Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
+    val containerName = remember(initialContainer) {
+        initialContainer ?: Settings.droidspaces_container_name.ifBlank { DroidspacesConstants.DEFAULT_CONTAINER_NAME }
     }
 
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
@@ -109,7 +114,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
     val drawerWidth = 320.dp
 
     fun launchUserSelectionOrSession(isNewTab: Boolean) {
-        val defaultUser = Settings.droidspaces_terminal_default_user.trim()
+        val defaultUser = (initialUser ?: Settings.droidspaces_terminal_default_user).trim()
         if (defaultUser.isNotEmpty() && !isNewTab) {
             val client = TerminalBackEnd()
             val isAndroidRoot = defaultUser == DroidspacesConstants.ANDROID_ROOT_USER

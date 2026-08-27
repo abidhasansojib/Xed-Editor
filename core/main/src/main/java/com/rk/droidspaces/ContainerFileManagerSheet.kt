@@ -142,10 +142,11 @@ fun ContainerFileManagerSheet(
 
     fun openTerminalAtPath(path: String) {
         try {
+            val clean = path.trimEnd('/').ifEmpty { "/" }
             val intent = Intent().setClassName(context.packageName, "com.rk.activities.terminal.Terminal").apply {
-                val clean = path.trimEnd('/')
                 putExtra("initial_command", "cd '$clean' && clear")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra("container_name", containerName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
             context.startActivity(intent)
         } catch (_: Exception) {
@@ -978,8 +979,9 @@ fun ContainerFileManagerSheet(
                                 onDismiss()
                             },
                             onOpenInTerminal = {
-                                val path = if (item is DroidspacesFileObject) item.containerPath else item.getAbsolutePath()
-                                openTerminalAtPath(path)
+                                val path = if (item is DroidspacesFileObject) item.containerPath else item.getAbsolutePath().substringAfter("://").substringAfter("/")
+                                val targetDir = if (item.isDirectory()) path else path.substringBeforeLast('/', "").ifEmpty { "/" }
+                                openTerminalAtPath(targetDir)
                             },
                             onCopyPath = {
                                 val path = if (item is DroidspacesFileObject) item.containerPath else item.getAbsolutePath()
