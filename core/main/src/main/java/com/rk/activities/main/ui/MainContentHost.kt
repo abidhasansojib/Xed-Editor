@@ -23,9 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -150,7 +148,7 @@ fun MainActivity.MainContentHost(
                             )
                         }
                     },
-                    modifier = Modifier.nestedScroll(rememberNestedScrollInteropConnection()),
+                    modifier = Modifier,
                     topBar = {
                         XedTopBar(
                             drawerState = drawerState,

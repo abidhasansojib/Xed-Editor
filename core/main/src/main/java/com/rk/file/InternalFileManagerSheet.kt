@@ -172,16 +172,17 @@ fun InternalFileManagerSheet(
 
     // New File Dialog
     if (showNewFileDialog) {
+        var newName by remember { mutableStateOf("NewFile") }
         SingleInputDialog(
             title = stringResource(strings.new_file),
             inputLabel = stringResource(strings.file_name),
-            initialInput = "",
-            confirmButtonText = stringResource(strings.create),
-            onConfirm = { name ->
-                showNewFileDialog = false
-                if (name.isNotBlank()) {
+            inputValue = newName,
+            onInputValueChange = { newName = it },
+            onConfirm = {
+                val clean = newName.trim()
+                if (clean.isNotBlank()) {
                     scope.launch {
-                        val newFile = File(currentPath, name.trim())
+                        val newFile = File(currentPath, clean)
                         val success = withContext(Dispatchers.IO) {
                             try {
                                 if (newFile.exists()) false else newFile.createNewFile()
@@ -191,29 +192,30 @@ fun InternalFileManagerSheet(
                         }
                         if (success) {
                             loadDirectory(currentPath)
-                            toast(strings.file_created)
+                            toast("File created")
                         } else {
                             toast("Failed to create file")
                         }
                     }
                 }
             },
-            onDismiss = { showNewFileDialog = false },
+            onFinish = { showNewFileDialog = false },
         )
     }
 
     // New Folder Dialog
     if (showNewFolderDialog) {
+        var newFolderName by remember { mutableStateOf("NewFolder") }
         SingleInputDialog(
             title = stringResource(strings.new_folder),
             inputLabel = stringResource(strings.folder_name),
-            initialInput = "",
-            confirmButtonText = stringResource(strings.create),
-            onConfirm = { name ->
-                showNewFolderDialog = false
-                if (name.isNotBlank()) {
+            inputValue = newFolderName,
+            onInputValueChange = { newFolderName = it },
+            onConfirm = {
+                val clean = newFolderName.trim()
+                if (clean.isNotBlank()) {
                     scope.launch {
-                        val newFolder = File(currentPath, name.trim())
+                        val newFolder = File(currentPath, clean)
                         val success = withContext(Dispatchers.IO) {
                             try {
                                 newFolder.mkdirs()
@@ -223,31 +225,32 @@ fun InternalFileManagerSheet(
                         }
                         if (success) {
                             loadDirectory(currentPath)
-                            toast(strings.folder_created)
+                            toast("Folder created")
                         } else {
                             toast("Failed to create folder")
                         }
                     }
                 }
             },
-            onDismiss = { showNewFolderDialog = false },
+            onFinish = { showNewFolderDialog = false },
         )
     }
 
     // Rename Dialog
     if (showRenameDialog && selectedFileForAction != null) {
         val target = selectedFileForAction!!
+        var renameName by remember { mutableStateOf(target.name) }
         SingleInputDialog(
             title = stringResource(strings.rename),
             inputLabel = stringResource(strings.name),
-            initialInput = target.name,
-            confirmButtonText = stringResource(strings.rename),
-            onConfirm = { newName ->
-                showRenameDialog = false
-                if (newName.isNotBlank() && newName.trim() != target.name) {
+            inputValue = renameName,
+            onInputValueChange = { renameName = it },
+            onConfirm = {
+                val clean = renameName.trim()
+                if (clean.isNotBlank() && clean != target.name) {
                     scope.launch {
                         val parent = target.parentFile ?: File(currentPath)
-                        val dstFile = File(parent, newName.trim())
+                        val dstFile = File(parent, clean)
                         val success = withContext(Dispatchers.IO) {
                             try {
                                 target.renameTo(dstFile)
@@ -257,14 +260,14 @@ fun InternalFileManagerSheet(
                         }
                         if (success) {
                             loadDirectory(currentPath)
-                            toast(strings.renamed)
+                            toast("Renamed")
                         } else {
                             toast("Failed to rename")
                         }
                     }
                 }
             },
-            onDismiss = {
+            onFinish = {
                 showRenameDialog = false
                 selectedFileForAction = null
             },
@@ -303,7 +306,7 @@ fun InternalFileManagerSheet(
                             selectedItems = emptySet()
                             selectedFileForAction = null
                             loadDirectory(currentPath)
-                            toast(strings.deleted)
+                            toast("Deleted")
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -627,7 +630,7 @@ fun InternalFileManagerSheet(
                                 if (success) {
                                     if (clip.isCut) clipboard = null
                                     loadDirectory(currentPath)
-                                    toast(strings.pasted)
+                                    toast("Pasted")
                                 } else {
                                     toast("Failed to paste")
                                 }
@@ -754,7 +757,7 @@ fun InternalFileManagerSheet(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search files & folders in ${currentPath.substringAfterLast('/').ifEmpty { "/" }}…") },
+                placeholder = { Text("Search files & folders…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -825,7 +828,7 @@ fun InternalFileManagerSheet(
 
                                 InternalFileRow(
                                     file = item,
-                                    fileObject = wrapper,
+                                    fileWrapper = wrapper,
                                     isSelectMode = isSelectMode,
                                     isSelected = isSelected,
                                     onToggleSelect = {
@@ -840,8 +843,6 @@ fun InternalFileManagerSheet(
                                             scope.launch {
                                                 mainActivity?.viewModel?.editorManager?.openFile(
                                                     fileObject = wrapper,
-                                                    projectRoot = null,
-                                                    checkDuplicate = true,
                                                     switchToTab = true,
                                                 )
                                                 onDismiss()
@@ -910,7 +911,7 @@ fun InternalFileManagerSheet(
 @Composable
 fun InternalFileRow(
     file: File,
-    fileObject: FileObject,
+    fileWrapper: FileWrapper,
     isSelectMode: Boolean,
     isSelected: Boolean,
     onToggleSelect: () -> Unit,
@@ -943,7 +944,7 @@ fun InternalFileRow(
             )
         }
 
-        FileIcon(fileObject = fileObject)
+        FileIcon(file = fileWrapper)
 
         Spacer(modifier = Modifier.width(12.dp))
 
