@@ -18,8 +18,8 @@ import com.termux.terminal.WcWidth;
  */
 public final class TerminalRenderer {
 
-    final int mTextSize;
-    final Typeface mTypeface;
+    public final int mTextSize;
+    public final Typeface mTypeface;
     private final Paint mTextPaint = new Paint();
 
     /**

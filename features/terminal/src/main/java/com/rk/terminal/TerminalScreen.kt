@@ -441,7 +441,7 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                     view.attachSession(currentSession)
                                 }
                                 val targetSize = Settings.terminal_font_size
-                                if (view.mRenderer?.mTextSize != targetSize) {
+                                if (view.textSize != targetSize) {
                                     view.setTextSize(targetSize)
                                 }
                                 view.applyTerminalColors(onSurfaceColor, surfaceColor)

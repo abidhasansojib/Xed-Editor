@@ -541,11 +541,10 @@ public final class TerminalView extends View {
         unsetStoredSelectedText();
     }
 
-    /**
-     * Sets the text size, which in turn sets the number of rows and columns.
-     *
-     * @param textSize the new font size, in density-independent pixels.
-     */
+    public int getTextSize() {
+        return mRenderer != null ? mRenderer.mTextSize : 0;
+    }
+
     public void setTextSize(int textSize) {
         if (mRenderer != null && mRenderer.mTextSize == textSize) return;
         mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
