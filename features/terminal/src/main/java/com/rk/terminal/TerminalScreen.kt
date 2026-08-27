@@ -440,7 +440,10 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                 if (currentSession != null && view.mTermSession != currentSession) {
                                     view.attachSession(currentSession)
                                 }
-                                view.setTextSize(Settings.terminal_font_size)
+                                val targetSize = Settings.terminal_font_size
+                                if (view.mRenderer?.mTextSize != targetSize) {
+                                    view.setTextSize(targetSize)
+                                }
                                 view.applyTerminalColors(onSurfaceColor, surfaceColor)
                             },
                         )
@@ -494,12 +497,6 @@ fun TerminalScreen(terminalActivity: Terminal, initialCommand: String? = null) {
                                     vkv.virtualKeysViewClient = VirtualKeysListener(session)
                                 }
                             }
-                            vkv.setButtonColors(
-                                onSurfaceColor,
-                                0xFFf44336.toInt(),
-                                0x00000000,
-                                (0x33888888).toInt(),
-                            )
                         },
                     )
                 }

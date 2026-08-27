@@ -6,6 +6,7 @@ import android.webkit.MimeTypeMap
 import com.rk.file.FileObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.Serializable
@@ -88,12 +89,25 @@ class DroidspacesFileObject(
         }
 
     override suspend fun writeText(text: String) {
-        writeText(text, Charsets.UTF_8)
+        val success = writeText(text, Charsets.UTF_8)
+        if (!success) {
+            throw IOException("Failed to write to container file: $containerPath")
+        }
     }
 
     override suspend fun writeText(content: String, charset: Charset): Boolean =
         withContext(Dispatchers.IO) {
             DroidspacesShell.writeText(containerName, containerPath, content, charset)
+        }
+
+    suspend fun chmod(mode: String): Boolean =
+        withContext(Dispatchers.IO) {
+            DroidspacesShell.chmod(containerName, containerPath, mode)
+        }
+
+    suspend fun chown(ownerGroup: String): Boolean =
+        withContext(Dispatchers.IO) {
+            DroidspacesShell.chown(containerName, containerPath, ownerGroup)
         }
 
     override suspend fun getInputStream(): InputStream =

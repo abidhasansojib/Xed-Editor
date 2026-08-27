@@ -58,14 +58,17 @@ jobs:
         id: release_info
         run: |
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts || echo "3.4.4")
+          BUILD_NUMBER="${{ github.run_number }}"
+          BASE_VERSION="1.0.0"
+          VERSION_NAME="${BASE_VERSION}.${BUILD_NUMBER}"
           echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
           if [ "${{ github.ref_type }}" = "tag" ]; then
             echo "RELEASE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
             echo "RELEASE_NAME=Xed-Editor ${{ github.ref_name }}" >> $GITHUB_ENV
           else
-            echo "RELEASE_TAG=v${VERSION_NAME}-${COMMIT_HASH}" >> $GITHUB_ENV
+            echo "RELEASE_TAG=v${VERSION_NAME}" >> $GITHUB_ENV
             echo "RELEASE_NAME=Xed-Editor v${VERSION_NAME} (${COMMIT_HASH})" >> $GITHUB_ENV
           fi
 
@@ -80,6 +83,8 @@ jobs:
         env:
           KEYSTORE_FILE: /tmp/xed.keystore
           SIGNING_PROPERTIES_FILE: /tmp/signing.properties
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=\"-Xmx6144m -XX:+UseG1GC -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\""
         continue-on-error: false
 

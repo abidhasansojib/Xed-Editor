@@ -11,14 +11,16 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.rk.xededitor"
+        applicationId = "com.xed.editor"
         minSdk = 26
 
         targetSdk = 37
 
-        // versioning
-        versionCode = 104
-        versionName = "3.4.4"
+        // versioning: base 1.0.0, auto-increments with GITHUB_RUN_NUMBER on CI
+        val baseVersion = "1.0.0"
+        val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: System.getenv("BUILD_NUMBER"))?.toIntOrNull() ?: 1
+        versionCode = buildNumber
+        versionName = System.getenv("VERSION_NAME") ?: (if (System.getenv("GITHUB_ACTIONS") == "true") "$baseVersion.$buildNumber" else baseVersion)
         vectorDrawables { useSupportLibrary = true }
     }
 

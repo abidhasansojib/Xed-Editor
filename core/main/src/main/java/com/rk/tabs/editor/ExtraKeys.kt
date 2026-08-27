@@ -46,7 +46,7 @@ fun ExtraKeys(editorTab: EditorTab) {
     val commands by remember { derivedStateOf { commandIds.mapNotNull { id -> CommandProvider.getForId(id) } } }
 
     val commandExtraKeys =
-        remember(commands) {
+        remember(commands, editorTab.editorState.canUndo, editorTab.editorState.canRedo, editorTab.editorState.editable) {
             commands.map { command ->
                 ExtraKey(
                     label = command.getLabel(),

@@ -179,7 +179,7 @@
  !transient <fields>;
 }
 # Keep classes and members for all models used with Gson
-#-keep class com.rk.xededitor.** { *; }
+#-keep class com.xed.editor.** { *; }
 #-keep class com.rk.plugin.** { *; }
 # Keep all classes that might be used by Gson
 -keepclassmembers class * {

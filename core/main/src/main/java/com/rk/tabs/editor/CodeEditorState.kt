@@ -25,9 +25,32 @@ data class CodeEditorState(val initialContent: Content? = null) {
     var editor: WeakReference<Editor?> = WeakReference(null)
 
     var content = initialContent
+    var savedContent: String? = null
     var isDirty by mutableStateOf(false)
     var editable by mutableStateOf(Settings.read_only_default.not())
     val updateLock = Mutex()
+
+    fun checkDirty() {
+        val ed = editor.get() ?: return
+        val saved = savedContent
+        if (saved == null) {
+            isDirty = true
+            return
+        }
+        val currentText = ed.text
+        if (currentText.length != saved.length) {
+            isDirty = true
+            return
+        }
+        var matches = true
+        for (i in 0 until saved.length) {
+            if (currentText[i] != saved[i]) {
+                matches = false
+                break
+            }
+        }
+        isDirty = !matches
+    }
 
     var editorConfigLoaded: CompletableDeferred<ResourceProperties>? = null
     var formatDeferred: CompletableDeferred<Boolean>? = null

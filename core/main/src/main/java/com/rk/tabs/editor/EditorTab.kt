@@ -79,6 +79,7 @@ import org.ec4j.core.ResourcePath
 import org.ec4j.core.ResourceProperties
 import org.ec4j.core.ResourcePropertiesService
 import org.ec4j.core.model.PropertyType
+import java.io.IOException
 import java.nio.charset.Charset
 import java.nio.file.Paths
 import java.util.UUID
@@ -155,9 +156,10 @@ open class EditorTab(
                 if (newContent != null && !editorState.isDirty && newContent != editorState.content) {
                     editorState.updateLock.withLock {
                         editorState.content = newContent
+                        editorState.savedContent = tab.editorState.savedContent
                         editorState.editor.get()?.setText(newContent)
                         editorState.updateUndoRedo()
-                        editorState.isDirty = false
+                        editorState.isDirty = tab.editorState.isDirty
                     }
                 }
             }
@@ -168,6 +170,7 @@ open class EditorTab(
         scope.launch {
             val file = file
             if (file == null) {
+                editorState.savedContent = initialContent?.toString() ?: ""
                 editorState.contentLoaded.complete(Unit)
                 editorState.editable = !isReadOnly
                 editorState.textmateScope = FileTypeManager.fromExtension(fallbackExtension).textmateScope
@@ -185,7 +188,14 @@ open class EditorTab(
                 }
             }
 
-            if (!file.exists() || !file.canRead()) return@launch
+            scope.launch(Dispatchers.IO) {
+                loadEditorConfig()
+            }
+
+            if (!file.exists() || !file.canRead()) {
+                editorState.contentLoaded.complete(Unit)
+                return@launch
+            }
             if (!file.canWrite()) {
                 this@EditorTab.isReadOnly = true
             }
@@ -196,8 +206,6 @@ open class EditorTab(
             if (editorState.textmateScope == null) {
                 editorState.textmateScope = FileTypeManager.fromFileName(file.getName()).textmateScope
             }
-
-            loadEditorConfig()
 
             if (editorState.content == null) {
                 withContext(Dispatchers.IO) {
@@ -213,6 +221,9 @@ open class EditorTab(
                     }
                         .onFailure { errorDialog(throwable = it) }
                 }
+            }
+            if (editorState.savedContent == null) {
+                editorState.savedContent = editorState.content?.toString() ?: ""
             }
             editorState.contentLoaded.complete(Unit)
         }
@@ -334,6 +345,7 @@ open class EditorTab(
             withContext(Dispatchers.Main) {
                 editorState.updateLock.withLock {
                     editorState.content = newContent
+                    editorState.savedContent = newContent.toString()
                     editorState.editor.get()?.setText(newContent)
                     editorState.updateUndoRedo()
                     editorState.isDirty = false
@@ -356,8 +368,12 @@ open class EditorTab(
                 val editor = editorState.editor.get() ?: return@runCatching
                 val content = editor.text.toString()
                 val normalizedContent = editor.lineEnding.applyOn(content)
-                file.writeText(normalizedContent, charset)
+                val success = file.writeText(normalizedContent, charset)
+                if (!success) {
+                    throw IOException(strings.cant_write.getString())
+                }
 
+                editorState.savedContent = editor.text.toString()
                 editorState.isDirty = false
                 lspConnector?.notifySave()
             }
@@ -575,15 +591,17 @@ open class EditorTab(
                     modifier = Modifier.weight(1f),
                     intelligentFeatures = intelligentFeatures,
                     onTextChange = {
+                        editorState.checkDirty()
+
                         if (Settings.auto_save && !isTemp && file != null) {
                             autoSaveJob?.cancel()
-                            autoSaveJob =
-                                scope.launch(Dispatchers.IO) {
-                                    delay(Settings.auto_save_delay.milliseconds)
-                                    quickSave()
-                                }
-                        } else {
-                            editorState.isDirty = true
+                            if (editorState.isDirty) {
+                                autoSaveJob =
+                                    scope.launch(Dispatchers.IO) {
+                                        delay(Settings.auto_save_delay.milliseconds)
+                                        quickSave()
+                                    }
+                            }
                         }
 
                         if (file?.getName() == ".editorconfig" && Settings.enable_editorconfig) {

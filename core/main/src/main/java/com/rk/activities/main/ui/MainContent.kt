@@ -253,7 +253,7 @@ fun MainContent(
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize().clipToBounds(),
-                beyondViewportPageCount = mainViewModel.tabs.size,
+                beyondViewportPageCount = 1,
                 userScrollEnabled = false,
                 key = { mainViewModel.tabs.getOrNull(it)?.id ?: "" },
             ) { page ->
