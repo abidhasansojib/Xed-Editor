@@ -48,13 +48,23 @@
    * **Multi-Selection Batch Mode:** Supported batch selection with select-all, batch deletion, and batch permissions updates.
    * **Detailed File Properties Modal:** Displays exact size in bytes, octal & symbolic permissions, owner, group, last modified timestamp, and type.
    * **Syntax-Aware File Icons & Sorting:** Integrated `FileIcon` with icon pack support and comprehensive sorting (Name, Size, Date Modified, Hidden Files toggle).
+   * **Layout Polish:** Fixed container chip vertical wrapping and directory item click path resolution.
+
+6. **Terminal Intent & Directory Navigation Fix (`Terminal.kt` & `DroidspacesTerminalSessionManager.kt`):**
+   * Implemented `onNewIntent()` handling in `Terminal.kt` for `singleTask` background recovery.
+   * Added delayed command execution (`runCommandInSession`) to ensure container shell `/bin/bash` or `su` prompt attaches before sending `cd` commands.
+   * Passed container name and working directory extras from Container File Manager to Terminal.
+
+7. **Storage & Workspace Drawer Overhaul (`AddProjectSheet.kt` & `Drawer.kt`):**
+   * Replaced system file picker SAF contract with direct Internal Storage (`/sdcard`) access and Container Storage file manager sheet.
+   * Dynamic versioning `1.0.0.<run_number>` and package name migration (`com.xed.editor`).
 
 ---
 
 ### 📋 What's Next (Upcoming Priorities)
-1. **Live Android / Container Testing:**
-   * Verify file creation, modification, saving, and deletion in live Droidspaces containers (e.g. Ubuntu container and Android rootfs).
-   * Test keyboard open/close transitions in terminal sessions to confirm stutter-free frame rendering.
+1. **Live Container & File Management Verification:**
+   * Test folder navigation, batch file deletion, and direct workspace mounting in live Droidspaces container instances.
+   * Test terminal opening on deeply nested subdirectories.
 2. **LSP Diagnostics & Language Server Enhancements:**
    * Audit language server lifecycle events and process cleanup when closing tabs.
    * Optimize diagnostic tooltip popups and formatting providers for large multi-module projects.
