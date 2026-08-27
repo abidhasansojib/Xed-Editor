@@ -490,13 +490,17 @@ fun ContainerFileManagerSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Text(
                             text = stringResource(strings.container_file_manager),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
                         )
                         Surface(
                             shape = MaterialTheme.shapes.extraSmall,
@@ -507,6 +511,8 @@ fun ContainerFileManagerSheet(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                maxLines = 1,
+                                softWrap = false,
                             )
                         }
                     }
@@ -958,10 +964,13 @@ fun ContainerFileManagerSheet(
                                 if (isSelectMode) {
                                     selectedItems = if (isSelected) selectedItems - item else selectedItems + item
                                 } else if (item.isDirectory()) {
-                                    currentPath = item.getAbsolutePath().substringAfter("://").substringAfter("/")
-                                    if (!currentPath.startsWith("/")) {
-                                        currentPath = "/$currentPath"
+                                    val targetPath = if (item is DroidspacesFileObject) {
+                                        item.containerPath
+                                    } else {
+                                        val raw = item.getAbsolutePath().substringAfter("://").substringAfter("/")
+                                        if (raw.startsWith("/")) raw else "/$raw"
                                     }
+                                    currentPath = targetPath
                                 } else {
                                     scope.launch {
                                         mainActivity?.viewModel?.editorManager?.openFile(
