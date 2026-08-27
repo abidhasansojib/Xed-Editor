@@ -51,7 +51,7 @@ import kotlinx.coroutines.launch
 fun AddProjectSheet(
     onDismiss: () -> Unit,
     onAddProject: (FileObject) -> Unit,
-    openFolder: ManagedActivityResultLauncher<Uri?, Uri?>,
+    openFolder: ManagedActivityResultLauncher<Uri?, Uri?>? = null,
     showPrivateFileWarning: (onOK: () -> Unit) -> Unit,
 ) {
     val context = LocalContext.current
@@ -75,11 +75,12 @@ fun AddProjectSheet(
             SectionHeader(stringResource(strings.storage))
 
             AddDialogItem(
-                icon = Icon.ResourceIcon(drawables.file_symlink),
-                title = stringResource(strings.open_directory),
-                description = stringResource(strings.open_dir_desc),
+                icon = Icon.ResourceIcon(drawables.folder),
+                title = stringResource(strings.open_internal_storage),
+                description = stringResource(strings.open_internal_storage_desc),
                 onClick = {
-                    openFolder.launch(null)
+                    val storageDir = Environment.getExternalStorageDirectory()
+                    onAddProject(FileWrapper(storageDir))
                     onDismiss()
                 },
             )

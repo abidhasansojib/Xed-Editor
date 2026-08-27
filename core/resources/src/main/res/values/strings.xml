@@ -66,7 +66,8 @@
     <string name="error">Error</string>
     <string name="open_dir_desc">Open a directory via system file picker</string>
     <string name="internal_storage">Internal storage</string>
-    <string name="open_internal_storage">Open internal storage</string>
+    <string name="open_internal_storage">Internal storage</string>
+    <string name="open_internal_storage_desc">Open and browse device internal storage (/sdcard)</string>
     <string name="open_removable_storage">Open removable storage</string>
     <string name="add">Add</string>
     <string name="installed">Installed</string>
