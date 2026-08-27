@@ -56,8 +56,12 @@
    * Passed container name and working directory extras from Container File Manager to Terminal.
 
 7. **Storage & Workspace Drawer Overhaul (`AddProjectSheet.kt` & `Drawer.kt`):**
-   * Replaced system file picker SAF contract with direct Internal Storage (`/sdcard`) access and Container Storage file manager sheet.
+   * Replaced system file picker SAF contract with direct Internal Storage access and Container Storage file manager sheet.
    * Dynamic versioning `1.0.0.<run_number>` and package name migration (`com.xed.editor`).
+
+8. **Android Internal Storage File Manager (`InternalFileManagerSheet.kt`):**
+   * Built a full-featured in-app file browser and manager for Android's internal storage (`/sdcard`) matching all container file manager capabilities.
+   * Quick jump chips (`/sdcard`, `Download`, `Documents`, `DCIM`, `Pictures`, `Music`, `Movies`, `Android`), full breadcrumbs navigation, elevated "Open in Workspace" drawer tab mounting, "+ File" and "+ Folder" creation, clipboard copy/cut/paste, sorting & hidden files toggles, batch multi-selection deletion, real-time search, item context actions (Terminal, Copy, Cut, Duplicate, Rename, Properties, Delete), and direct file opening into editor tabs.
 
 ---
 

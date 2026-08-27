@@ -74,14 +74,16 @@ fun AddProjectSheet(
 
             SectionHeader(stringResource(strings.storage))
 
+            var showInternalFileManager by remember { mutableStateOf(false) }
+            var internalFileManagerInitialPath by remember { mutableStateOf<String?>(null) }
+
             AddDialogItem(
                 icon = Icon.ResourceIcon(drawables.folder),
                 title = stringResource(strings.open_internal_storage),
                 description = stringResource(strings.open_internal_storage_desc),
                 onClick = {
-                    val storageDir = Environment.getExternalStorageDirectory()
-                    onAddProject(FileWrapper(storageDir))
-                    onDismiss()
+                    internalFileManagerInitialPath = null
+                    showInternalFileManager = true
                 },
             )
 
@@ -124,6 +126,22 @@ fun AddProjectSheet(
                     }
                 },
             )
+
+            if (showInternalFileManager) {
+                com.rk.file.InternalFileManagerSheet(
+                    initialPath = internalFileManagerInitialPath,
+                    onDismiss = {
+                        showInternalFileManager = false
+                        onDismiss()
+                    },
+                    onOpenInDrawer = { fileObj ->
+                        lifecycleScope.launch {
+                            viewModel.addFileTreeTab(fileObj, save = true)
+                            onDismiss()
+                        }
+                    },
+                )
+            }
 
             if (showUserPicker) {
                 com.rk.droidspaces.SelectUserSheet(
@@ -179,8 +197,8 @@ fun AddProjectSheet(
                         title = name,
                         description = stringResource(description),
                     ) {
-                        viewModel.addFileTreeTab(FileWrapper(root))
-                        onDismiss()
+                        internalFileManagerInitialPath = root.absolutePath
+                        showInternalFileManager = true
                     }
                 }
             }
