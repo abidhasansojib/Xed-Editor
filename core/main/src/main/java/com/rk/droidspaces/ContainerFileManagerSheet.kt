@@ -78,9 +78,6 @@ import com.rk.resources.drawables
 import com.rk.resources.strings
 import com.rk.utils.formatFileSize
 import com.rk.utils.toast
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -1074,17 +1071,9 @@ private fun ContainerFileRow(
     var menuExpanded by remember { mutableStateOf(false) }
     val isDir = fileObject.isDirectory()
     val cachedLen = if (fileObject is DroidspacesFileObject) fileObject.cachedLength else 0L
-    var sizeText by remember(fileObject) {
-        mutableStateOf(if (cachedLen > 0L) formatFileSize(cachedLen) else "")
-    }
-
-    if (!isDir && sizeText.isEmpty()) {
-        LaunchedEffect(fileObject) {
-            val len = withContext(Dispatchers.IO) { fileObject.length() }
-            if (len > 0L) {
-                sizeText = formatFileSize(len)
-            }
-        }
+    // Use cached length immediately to avoid async height changes that cause scroll jitter
+    val sizeText = remember(fileObject) {
+        if (cachedLen > 0L) formatFileSize(cachedLen) else ""
     }
 
     Surface(
@@ -1119,14 +1108,13 @@ private fun ContainerFileRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!isDir && sizeText.isNotEmpty()) {
-                    Text(
-                        text = sizeText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
-                }
+                // Always render subtitle to keep row height stable and prevent scroll jitter
+                Text(
+                    text = if (isDir) "Directory" else sizeText.ifEmpty { "\u00A0" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
             }
 
             Box {

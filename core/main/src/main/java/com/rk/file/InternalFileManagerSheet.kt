@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
+
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -773,133 +773,150 @@ fun InternalFileManagerSheet(
             Spacer(modifier = Modifier.height(8.dp))
 
             // File Listing
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (errorMessage != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = errorMessage!!, color = MaterialTheme.colorScheme.error)
+                }
+            } else {
+                val filteredFiles = remember(fileItems, searchQuery, showHiddenFiles, sortMode) {
+                    var list = fileItems
+                    if (!showHiddenFiles) {
+                        list = list.filter { !it.name.startsWith(".") }
                     }
-                } else if (errorMessage != null) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = errorMessage!!, color = MaterialTheme.colorScheme.error)
+                    if (searchQuery.isNotBlank()) {
+                        list = list.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                    }
+                    val dirs = list.filter { it.isDirectory }
+                    val files = list.filter { it.isFile }
+
+                    val sortedDirs = when (sortMode) {
+                        FileSortMode.NAME_ASC -> dirs.sortedBy { it.name.lowercase() }
+                        FileSortMode.NAME_DESC -> dirs.sortedByDescending { it.name.lowercase() }
+                        FileSortMode.SIZE_DESC -> dirs.sortedByDescending { it.length() }
+                        FileSortMode.SIZE_ASC -> dirs.sortedBy { it.length() }
+                        FileSortMode.DATE_DESC -> dirs.sortedByDescending { it.lastModified() }
+                        FileSortMode.DATE_ASC -> dirs.sortedBy { it.lastModified() }
+                    }
+                    val sortedFiles = when (sortMode) {
+                        FileSortMode.NAME_ASC -> files.sortedBy { it.name.lowercase() }
+                        FileSortMode.NAME_DESC -> files.sortedByDescending { it.name.lowercase() }
+                        FileSortMode.SIZE_DESC -> files.sortedByDescending { it.length() }
+                        FileSortMode.SIZE_ASC -> files.sortedBy { it.length() }
+                        FileSortMode.DATE_DESC -> files.sortedByDescending { it.lastModified() }
+                        FileSortMode.DATE_ASC -> files.sortedBy { it.lastModified() }
+                    }
+                    sortedDirs + sortedFiles
+                }
+
+                if (filteredFiles.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (searchQuery.isNotBlank()) "No files match \"$searchQuery\"" else "Folder is empty",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 } else {
-                    val filteredFiles = remember(fileItems, searchQuery, showHiddenFiles, sortMode) {
-                        var list = fileItems
-                        if (!showHiddenFiles) {
-                            list = list.filter { !it.name.startsWith(".") }
-                        }
-                        if (searchQuery.isNotBlank()) {
-                            list = list.filter { it.name.contains(searchQuery, ignoreCase = true) }
-                        }
-                        val dirs = list.filter { it.isDirectory }
-                        val files = list.filter { it.isFile }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    ) {
+                        items(filteredFiles, key = { it.absolutePath }) { item ->
+                            val isSelected = selectedItems.contains(item)
+                            val wrapper = remember(item) { FileWrapper(item) }
 
-                        val sortedDirs = when (sortMode) {
-                            FileSortMode.NAME_ASC -> dirs.sortedBy { it.name.lowercase() }
-                            FileSortMode.NAME_DESC -> dirs.sortedByDescending { it.name.lowercase() }
-                            FileSortMode.SIZE_DESC -> dirs.sortedByDescending { it.length() }
-                            FileSortMode.SIZE_ASC -> dirs.sortedBy { it.length() }
-                            FileSortMode.DATE_DESC -> dirs.sortedByDescending { it.lastModified() }
-                            FileSortMode.DATE_ASC -> dirs.sortedBy { it.lastModified() }
-                        }
-                        val sortedFiles = when (sortMode) {
-                            FileSortMode.NAME_ASC -> files.sortedBy { it.name.lowercase() }
-                            FileSortMode.NAME_DESC -> files.sortedByDescending { it.name.lowercase() }
-                            FileSortMode.SIZE_DESC -> files.sortedByDescending { it.length() }
-                            FileSortMode.SIZE_ASC -> files.sortedBy { it.length() }
-                            FileSortMode.DATE_DESC -> files.sortedByDescending { it.lastModified() }
-                            FileSortMode.DATE_ASC -> files.sortedBy { it.lastModified() }
-                        }
-                        sortedDirs + sortedFiles
-                    }
-
-                    if (filteredFiles.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = if (searchQuery.isNotBlank()) "No files match \"$searchQuery\"" else "Folder is empty",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(filteredFiles, key = { it.absolutePath }) { item ->
-                                val isSelected = selectedItems.contains(item)
-                                val wrapper = remember(item) { FileWrapper(item) }
-
-                                InternalFileRow(
-                                    file = item,
-                                    fileWrapper = wrapper,
-                                    isSelectMode = isSelectMode,
-                                    isSelected = isSelected,
-                                    onToggleSelect = {
+                            InternalFileRow(
+                                file = item,
+                                fileWrapper = wrapper,
+                                isSelectMode = isSelectMode,
+                                isSelected = isSelected,
+                                onToggleSelect = {
+                                    selectedItems = if (isSelected) selectedItems - item else selectedItems + item
+                                },
+                                onClick = {
+                                    if (isSelectMode) {
                                         selectedItems = if (isSelected) selectedItems - item else selectedItems + item
-                                    },
-                                    onClick = {
-                                        if (isSelectMode) {
-                                            selectedItems = if (isSelected) selectedItems - item else selectedItems + item
-                                        } else if (item.isDirectory) {
-                                            currentPath = item.absolutePath
-                                        } else {
-                                            scope.launch {
-                                                mainActivity?.viewModel?.editorManager?.openFile(
-                                                    fileObject = wrapper,
-                                                    switchToTab = true,
-                                                )
-                                                onDismiss()
-                                            }
-                                        }
-                                    },
-                                    onOpenAsDrawerTab = {
-                                        onOpenInDrawer(wrapper)
-                                        onDismiss()
-                                    },
-                                    onOpenInTerminal = {
-                                        val targetDir = if (item.isDirectory) item.absolutePath else item.parentFile?.absolutePath ?: "/"
-                                        openTerminalAtPath(targetDir)
-                                    },
-                                    onCopyPath = {
-                                        copyToClipboard(item.absolutePath)
-                                    },
-                                    onCopy = {
-                                        clipboard = InternalClipboard(file = item, isCut = false)
-                                        toast("Copied to clipboard")
-                                    },
-                                    onCut = {
-                                        clipboard = InternalClipboard(file = item, isCut = true)
-                                        toast("Cut to clipboard")
-                                    },
-                                    onDuplicate = {
+                                    } else if (item.isDirectory) {
+                                        currentPath = item.absolutePath
+                                    } else {
                                         scope.launch {
-                                            val parent = item.parentFile ?: File(currentPath)
-                                            val name = item.name
-                                            val newName = if (name.contains('.')) {
-                                                val base = name.substringBeforeLast('.')
-                                                val ext = name.substringAfterLast('.')
-                                                "${base}_copy.$ext"
-                                            } else {
-                                                "${name}_copy"
-                                            }
-                                            val dst = File(parent, newName)
-                                            withContext(Dispatchers.IO) {
-                                                if (item.isDirectory) item.copyRecursively(dst, overwrite = true) else item.copyTo(dst, overwrite = true)
-                                            }
-                                            loadDirectory(currentPath)
+                                            mainActivity?.viewModel?.editorManager?.openFile(
+                                                fileObject = wrapper,
+                                                switchToTab = true,
+                                            )
+                                            onDismiss()
                                         }
-                                    },
-                                    onRename = {
-                                        selectedFileForAction = item
-                                        showRenameDialog = true
-                                    },
-                                    onProperties = {
-                                        selectedFileForAction = item
-                                        showPropertiesDialog = true
-                                    },
-                                    onDelete = {
-                                        selectedFileForAction = item
-                                        showDeleteConfirmDialog = true
-                                    },
-                                )
-                            }
+                                    }
+                                },
+                                onOpenAsDrawerTab = {
+                                    onOpenInDrawer(wrapper)
+                                    onDismiss()
+                                },
+                                onOpenInTerminal = {
+                                    val targetDir = if (item.isDirectory) item.absolutePath else item.parentFile?.absolutePath ?: "/"
+                                    openTerminalAtPath(targetDir)
+                                },
+                                onCopyPath = {
+                                    copyToClipboard(item.absolutePath)
+                                },
+                                onCopy = {
+                                    clipboard = InternalClipboard(file = item, isCut = false)
+                                    toast("Copied to clipboard")
+                                },
+                                onCut = {
+                                    clipboard = InternalClipboard(file = item, isCut = true)
+                                    toast("Cut to clipboard")
+                                },
+                                onDuplicate = {
+                                    scope.launch {
+                                        val parent = item.parentFile ?: File(currentPath)
+                                        val name = item.name
+                                        val newName = if (name.contains('.')) {
+                                            val base = name.substringBeforeLast('.')
+                                            val ext = name.substringAfterLast('.')
+                                            "${base}_copy.$ext"
+                                        } else {
+                                            "${name}_copy"
+                                        }
+                                        val dst = File(parent, newName)
+                                        withContext(Dispatchers.IO) {
+                                            if (item.isDirectory) item.copyRecursively(dst, overwrite = true) else item.copyTo(dst, overwrite = true)
+                                        }
+                                        loadDirectory(currentPath)
+                                    }
+                                },
+                                onRename = {
+                                    selectedFileForAction = item
+                                    showRenameDialog = true
+                                },
+                                onProperties = {
+                                    selectedFileForAction = item
+                                    showPropertiesDialog = true
+                                },
+                                onDelete = {
+                                    selectedFileForAction = item
+                                    showDeleteConfirmDialog = true
+                                },
+                            )
                         }
                     }
                 }
@@ -929,109 +946,122 @@ fun InternalFileRow(
     var menuExpanded by remember { mutableStateOf(false) }
     val isDir = file.isDirectory
 
-    Row(
+    // Pre-compute subtitle text once per item to avoid repeated SimpleDateFormat allocations
+    // and layout-shifting recompositions that cause scroll jitter
+    val subText = remember(file.absolutePath, file.lastModified(), file.length()) {
+        val dateStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(file.lastModified()))
+        if (isDir) dateStr else "${formatFileSize(file.length())} • $dateStr"
+    }
+
+    Surface(
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable(onClick = onClick),
     ) {
-        if (isSelectMode) {
-            Checkbox(
-                checked = isSelected,
-                onCheckedChange = { onToggleSelect() },
-                modifier = Modifier.padding(end = 8.dp),
-            )
-        }
-
-        FileIcon(file = fileWrapper)
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = file.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isDir) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            val subText = if (isDir) {
-                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(file.lastModified()))
-            } else {
-                "${formatFileSize(file.length())} • ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(file.lastModified()))}"
-            }
-            Text(
-                text = subText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Box {
-            IconButton(onClick = { menuExpanded = true }) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More Options",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp, horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (isSelectMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onToggleSelect() },
+                    modifier = Modifier.size(24.dp),
                 )
             }
 
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                if (isDir) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(strings.add_to_workspace_drawer)) },
-                        leadingIcon = { Icon(painter = painterResource(drawables.folder), null) },
-                        onClick = { menuExpanded = false; onOpenAsDrawerTab() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(strings.open_in_terminal)) },
-                        leadingIcon = { Icon(painter = painterResource(drawables.terminal), null) },
-                        onClick = { menuExpanded = false; onOpenInTerminal() },
+            FileIcon(file = fileWrapper)
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = file.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (isDir) FontWeight.Medium else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                // Always render subtitle to keep row height stable and prevent scroll jitter
+                Text(
+                    text = subText.ifEmpty { "\u00A0" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More Options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
-                DropdownMenuItem(
-                    text = { Text(stringResource(strings.copy_path)) },
-                    leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
-                    onClick = { menuExpanded = false; onCopyPath() },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(strings.copy)) },
-                    leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
-                    onClick = { menuExpanded = false; onCopy() },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(strings.cut)) },
-                    leadingIcon = { Icon(painter = painterResource(drawables.cut), null) },
-                    onClick = { menuExpanded = false; onCut() },
-                )
-                DropdownMenuItem(
-                    text = { Text("Duplicate") },
-                    leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
-                    onClick = { menuExpanded = false; onDuplicate() },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(strings.rename)) },
-                    leadingIcon = { Icon(Icons.Default.Edit, null) },
-                    onClick = { menuExpanded = false; onRename() },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(strings.properties)) },
-                    leadingIcon = { Icon(Icons.Default.Info, null) },
-                    onClick = { menuExpanded = false; onProperties() },
-                )
-                HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text(stringResource(strings.delete), color = MaterialTheme.colorScheme.error) },
-                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                    onClick = { menuExpanded = false; onDelete() },
-                )
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    if (isDir) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(strings.add_to_workspace_drawer)) },
+                            leadingIcon = { Icon(painter = painterResource(drawables.folder), null) },
+                            onClick = { menuExpanded = false; onOpenAsDrawerTab() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(strings.open_in_terminal)) },
+                            leadingIcon = { Icon(painter = painterResource(drawables.terminal), null) },
+                            onClick = { menuExpanded = false; onOpenInTerminal() },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text(stringResource(strings.copy_path)) },
+                        leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
+                        onClick = { menuExpanded = false; onCopyPath() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(strings.copy)) },
+                        leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
+                        onClick = { menuExpanded = false; onCopy() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(strings.cut)) },
+                        leadingIcon = { Icon(painter = painterResource(drawables.cut), null) },
+                        onClick = { menuExpanded = false; onCut() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Duplicate") },
+                        leadingIcon = { Icon(painter = painterResource(drawables.copy), null) },
+                        onClick = { menuExpanded = false; onDuplicate() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(strings.rename)) },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) },
+                        onClick = { menuExpanded = false; onRename() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(strings.properties)) },
+                        leadingIcon = { Icon(Icons.Default.Info, null) },
+                        onClick = { menuExpanded = false; onProperties() },
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(stringResource(strings.delete), color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                        onClick = { menuExpanded = false; onDelete() },
+                    )
+                }
             }
         }
     }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
