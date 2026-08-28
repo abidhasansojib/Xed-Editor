@@ -575,57 +575,61 @@ object LaTeXParser {
         }
     }
 
+    private val BLACKBOARD_BOLD_MAP =
+        mapOf(
+            'A' to "𝔸", 'B' to "𝔹", 'C' to "ℂ", 'D' to "𝔻", 'E' to "𝔼", 'F' to "𝔽",
+            'G' to "𝔾", 'H' to "ℍ", 'I' to "𝕀", 'J' to "𝕁", 'K' to "𝕂", 'L' to "𝕃",
+            'M' to "𝕄", 'N' to "ℕ", 'O' to "𝕆", 'P' to "ℙ", 'Q' to "ℚ", 'R' to "ℝ",
+            'S' to "𝕊", 'T' to "𝕋", 'U' to "𝕌", 'V' to "𝕍", 'W' to "𝕎", 'X' to "𝕏",
+            'Y' to "𝕐", 'Z' to "ℤ",
+            'a' to "𝕒", 'b' to "𝕓", 'c' to "𝕔", 'd' to "𝕕", 'e' to "𝕖", 'f' to "𝗑",
+            'g' to "𝕘", 'h' to "𝕙", 'i' to "𝕚", 'j' to "𝕛", 'k' to "𝕜", 'l' to "𝕝",
+            'm' to "𝕞", 'n' to "𝕟", 'o' to "𝕠", 'p' to "𝕡", 'q' to "𝕢", 'r' to "𝕣",
+            's' to "𝕤", 't' to "𝕥", 'u' to "𝕦", 'v' to "𝕧", 'w' to "𝕨", 'x' to "𝕩",
+            'y' to "𝪰", 'z' to "𝕫",
+            '0' to "𝟘", '1' to "𝟙", '2' to "𝟚", '3' to "𝟛", '4' to "𝟜",
+            '5' to "𝟝", '6' to "𝟞", '7' to "𝟟", '8' to "𝟠", '9' to "𝟡",
+        )
+
+    private val CALLIGRAPHIC_MAP =
+        mapOf(
+            'A' to "𝒜", 'B' to "ℬ", 'C' to "𝒞", 'D' to "𝒟", 'E' to "ℰ", 'F' to "ℱ",
+            'G' to "𝒢", 'H' to "ℋ", 'I' to "ℐ", 'J' to "𝒥", 'K' to "𝒦", 'L' to "ℒ",
+            'M' to "ℳ", 'N' to "𝒩", 'O' to "𝒪", 'P' to "𝒫", 'Q' to "𝒬", 'R' to "ℛ",
+            'S' to "𝒮", 'T' to "𝒯", 'U' to "𝒰", 'V' to "𝒱", 'W' to "𝒲", 'X' to "𝒳",
+            'Y' to "𝒴", 'Z' to "𝒵",
+        )
+
+    private val FRAKTUR_MAP =
+        mapOf(
+            'A' to "𝔄", 'B' to "𝔅", 'C' to "ℭ", 'D' to "𝔇", 'E' to "𝔈", 'F' to "𝔉",
+            'G' to "𝔊", 'H' to "ℌ", 'I' to "ℑ", 'J' to "𝔍", 'K' to "𝔎", 'L' to "𝔏",
+            'M' to "𝔐", 'N' to "𝔑", 'O' to "𝔒", 'P' to "𝔓", 'Q' to "𝔔", 'R' to "ℜ",
+            'S' to "𝔖", 'T' to "𝔗", 'U' to "𝔘", 'V' to "𝔙", 'W' to "𝔚", 'X' to "𝔛",
+            'Y' to "𝔜", 'Z' to "ℨ",
+        )
+
+    private val SUPERSCRIPT_MAP =
+        mapOf(
+            '0' to "⁰", '1' to "¹", '2' to "²", '3' to "³", '4' to "⁴",
+            '5' to "⁵", '6' to "⁶", '7' to "⁷", '8' to "⁸", '9' to "⁹",
+            '+' to "⁺", '-' to "⁻", '=' to "⁼", '(' to "⁽", ')' to "⁾",
+            'n' to "ⁿ", 'i' to "ⁱ", 'x' to "ˣ", 'y' to "ʸ", 'a' to "ᵃ", 'b' to "ᵇ",
+        )
+
     private fun toBlackboardBold(text: String): String {
-        val map =
-            mapOf(
-                'A' to "𝔸", 'B' to "𝔹", 'C' to "ℂ", 'D' to "𝔻", 'E' to "𝔼", 'F' to "𝔽",
-                'G' to "𝔾", 'H' to "ℍ", 'I' to "𝕀", 'J' to "𝕁", 'K' to "𝕂", 'L' to "𝕃",
-                'M' to "𝕄", 'N' to "ℕ", 'O' to "𝕆", 'P' to "ℙ", 'Q' to "ℚ", 'R' to "ℝ",
-                'S' to "𝕊", 'T' to "𝕋", 'U' to "𝕌", 'V' to "𝕍", 'W' to "𝕎", 'X' to "𝕏",
-                'Y' to "𝕐", 'Z' to "ℤ",
-                'a' to "𝕒", 'b' to "𝕓", 'c' to "𝕔", 'd' to "𝕕", 'e' to "𝕖", 'f' to "𝕗",
-                'g' to "𝕘", 'h' to "𝕙", 'i' to "𝕚", 'j' to "𝕛", 'k' to "𝕜", 'l' to "𝕝",
-                'm' to "𝕞", 'n' to "𝕟", 'o' to "𝕠", 'p' to "𝕡", 'q' to "𝕢", 'r' to "𝕣",
-                's' to "𝕤", 't' to "𝕥", 'u' to "𝕦", 'v' to "𝕧", 'w' to "𝕨", 'x' to "𝕩",
-                'y' to "𝪰", 'z' to "𝕫",
-                '0' to "𝟘", '1' to "𝟙", '2' to "𝟚", '3' to "𝟛", '4' to "𝟜",
-                '5' to "𝟝", '6' to "𝟞", '7' to "𝟟", '8' to "𝟠", '9' to "𝟡",
-            )
-        return text.map { map[it] ?: it.toString() }.joinToString("")
+        return text.map { BLACKBOARD_BOLD_MAP[it] ?: it.toString() }.joinToString("")
     }
 
     private fun toCalligraphic(text: String): String {
-        val map =
-            mapOf(
-                'A' to "𝒜", 'B' to "ℬ", 'C' to "𝒞", 'D' to "𝒟", 'E' to "ℰ", 'F' to "ℱ",
-                'G' to "𝒢", 'H' to "ℋ", 'I' to "ℐ", 'J' to "𝒥", 'K' to "𝒦", 'L' to "ℒ",
-                'M' to "ℳ", 'N' to "𝒩", 'O' to "𝒪", 'P' to "𝒫", 'Q' to "𝒬", 'R' to "ℛ",
-                'S' to "𝒮", 'T' to "𝒯", 'U' to "𝒰", 'V' to "𝒱", 'W' to "𝒲", 'X' to "𝒳",
-                'Y' to "𝒴", 'Z' to "𝒵",
-            )
-        return text.map { map[it] ?: it.toString() }.joinToString("")
+        return text.map { CALLIGRAPHIC_MAP[it] ?: it.toString() }.joinToString("")
     }
 
     private fun toFraktur(text: String): String {
-        val map =
-            mapOf(
-                'A' to "𝔄", 'B' to "𝔅", 'C' to "ℭ", 'D' to "𝔇", 'E' to "𝔈", 'F' to "𝔉",
-                'G' to "𝔊", 'H' to "ℌ", 'I' to "ℑ", 'J' to "𝔍", 'K' to "𝔎", 'L' to "𝔏",
-                'M' to "𝔐", 'N' to "𝔑", 'O' to "𝔒", 'P' to "𝔓", 'Q' to "𝔔", 'R' to "ℜ",
-                'S' to "𝔖", 'T' to "𝔗", 'U' to "𝔘", 'V' to "𝔙", 'W' to "𝔚", 'X' to "𝔛",
-                'Y' to "𝔜", 'Z' to "ℨ",
-            )
-        return text.map { map[it] ?: it.toString() }.joinToString("")
+        return text.map { FRAKTUR_MAP[it] ?: it.toString() }.joinToString("")
     }
 
     private fun toSuperscriptString(text: String): String {
-        val supMap =
-            mapOf(
-                '0' to "⁰", '1' to "¹", '2' to "²", '3' to "³", '4' to "⁴",
-                '5' to "⁵", '6' to "⁶", '7' to "⁷", '8' to "⁸", '9' to "⁹",
-                '+' to "⁺", '-' to "⁻", '=' to "⁼", '(' to "⁽", ')' to "⁾",
-                'n' to "ⁿ", 'i' to "ⁱ", 'x' to "ˣ", 'y' to "ʸ", 'a' to "ᵃ", 'b' to "ᵇ",
-            )
-        return text.map { supMap[it] ?: it.toString() }.joinToString("")
+        return text.map { SUPERSCRIPT_MAP[it] ?: it.toString() }.joinToString("")
     }
 }

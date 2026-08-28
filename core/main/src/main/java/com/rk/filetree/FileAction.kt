@@ -77,14 +77,14 @@ abstract class FileAction : BaseFileAction {
 
     protected abstract suspend fun action(context: FileActionContext)
 
-    open suspend fun isSupported(
+    open fun isSupported(
         file: FileObject,
-        root: FileObject?
+        root: FileObject?,
     ): Boolean = true
 
-    open suspend fun isEnabled(
+    open fun isEnabled(
         file: FileObject,
-        root: FileObject?
+        root: FileObject?,
     ): Boolean = true
 
     abstract override val type: FileActionType
@@ -101,14 +101,14 @@ abstract class MultiFileAction : BaseFileAction {
 
     protected abstract suspend fun action(context: MultiFileActionContext)
 
-    open suspend fun isSupported(
+    open fun isSupported(
         files: List<FileObject>,
-        root: FileObject?
+        root: FileObject?,
     ): Boolean = true
 
-    open suspend fun isEnabled(
+    open fun isEnabled(
         files: List<FileObject>,
-        root: FileObject?
+        root: FileObject?,
     ): Boolean = true
 
     abstract override val type: FileActionType
@@ -176,37 +176,30 @@ object DeleteAction : MultiFileAction() {
         context.viewModel.showDeleteConfirmation(context.files, context.root)
     }
 
-
-
     /*
     * Prevent total stupidity
     * Some idiots delete their whole storage
     * In this function we have to determine if this directory is protected or not like root of the internal storage or sdcard
     * */
-    private suspend fun isProtected(fileObject: FileObject): Boolean{
+    private fun isProtected(fileObject: FileObject): Boolean {
         @SuppressLint("SdCardPath")
-        fun switchProtected(path: String): Boolean{
-            return when(path){
-                Environment.getExternalStorageDirectory().path -> true
-                Environment.getExternalStorageDirectory().absolutePath -> true
-                Environment.getExternalStorageDirectory().canonicalPath -> true
-                "/sdcard" -> true
-                "/storage" -> true
-                "/storage/emulated/0" -> true
+        fun switchProtected(path: String): Boolean {
+            val clean = path.trimEnd('/')
+            return when (clean) {
+                Environment.getExternalStorageDirectory().path,
+                Environment.getExternalStorageDirectory().absolutePath,
+                "/sdcard",
+                "/storage",
+                "/storage/emulated/0",
                 "content://com.android.externalstorage.documents/tree/primary%3A" -> true
                 else -> false
             }
         }
 
-        return if (fileObject is FileWrapper){
-            switchProtected(fileObject.getCanonicalPath()) || switchProtected(fileObject.getAbsolutePath())
-        }else{
-            switchProtected(fileObject.toUri().toString())
-        }
+        return switchProtected(fileObject.getAbsolutePath())
     }
 
-
-    override suspend fun isEnabled(files: List<FileObject>,root: FileObject?): Boolean {
+    override fun isEnabled(files: List<FileObject>, root: FileObject?): Boolean {
         val deletingProtected = files.any {
             isProtected(it)
         }
@@ -279,7 +272,7 @@ object PasteAction : FileAction() {
         }
     }
 
-    override suspend fun isEnabled(file: FileObject, root: FileObject?): Boolean {
+    override fun isEnabled(file: FileObject, root: FileObject?): Boolean {
         return FileOperations.clipboard.isNotEmpty()
     }
 
@@ -329,7 +322,7 @@ object OpenAsProjectAction : FileAction() {
         context.drawerViewModel.addFileTreeTab(context.file, true)
     }
 
-    override suspend fun isEnabled(file: FileObject, root: FileObject?): Boolean {
+    override fun isEnabled(file: FileObject, root: FileObject?): Boolean {
         val drawerViewModel = MainActivity.instance?.drawerViewModel ?: return false
         return drawerViewModel.drawerTabs.value.none { it is FileTreeTab && it.root == file }
     }
@@ -374,7 +367,7 @@ object UnzipAction : FileAction() {
         }
     }
 
-    override suspend fun isSupported(file: FileObject, root: FileObject?): Boolean = file.isZip() || file.isXedPackage()
+    override fun isSupported(file: FileObject, root: FileObject?): Boolean = file.isZip() || file.isXedPackage()
 
     override val type = FileActionType(file = true, folder = false, rootFolder = false)
 }
@@ -387,7 +380,7 @@ object InstallPackageAction : FileAction() {
         context.viewModel.viewModelScope.launch { IntentHandleRegistry.handleIntent(context.file) }
     }
 
-    override suspend fun isSupported(file: FileObject, root: FileObject?): Boolean = file.isXedPackage()
+    override fun isSupported(file: FileObject, root: FileObject?): Boolean = file.isXedPackage()
 
     override val type = FileActionType(file = true, folder = false, rootFolder = false)
 }

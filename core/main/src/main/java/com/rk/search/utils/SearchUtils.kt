@@ -40,8 +40,7 @@ object SearchUtils {
                 try {
                     file.useInputStream { stream ->
                         val buffer = CharArray(1024)
-                        val charsRead = InputStreamReader(stream, charset).read(buffer, 0, buffer.size)
-                        val sample = String(buffer, 0, charsRead)
+                        val sample = if (charsRead > 0) String(buffer, 0, charsRead) else ""
                         hasBinaryChars(sample)
                     }
                 } catch (e: Exception) {

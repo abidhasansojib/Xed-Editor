@@ -49,8 +49,8 @@ fun FileIcon(file: FileObject, iconTint: Color? = null, isExpanded: Boolean = fa
 
     val icon =
         when {
-            file.isFile() -> getBuiltInFileIcon(file)
             file.isDirectory() -> Icon.ResourceIcon(folder)
+            file.isFile() -> getBuiltInFileIcon(file.getName())
             file.isSymlink() -> Icon.ResourceIcon(fileSymlink)
             else -> Icon.ResourceIcon(unknown)
         }
@@ -141,20 +141,25 @@ fun getDrawableFileIcon(fileName: String, isDirectory: Boolean, isExpanded: Bool
     return iconPackIcon ?: builtinIcon
 }
 
-private fun getBuiltInFileIcon(fileName: String): Icon =
-    when (fileName) {
-        "contract.sol",
-        "LICENSE",
-        "NOTICE" -> Icon.ResourceIcon(text)
-        "gradlew",
-        "gradlew.bat" -> Icon.ResourceIcon(gradle)
-        "README.md" -> Icon.ResourceIcon(info)
+private val builtInIconCache = java.util.concurrent.ConcurrentHashMap<String, Icon>()
 
-        else -> {
-            val ext = fileName.substringAfterLast('.', "")
-            val type = FileTypeManager.fromExtension(ext)
-            type.iconOverride?.get(ext) ?: type.icon ?: Icon.ResourceIcon(plain_file)
+private fun getBuiltInFileIcon(fileName: String): Icon {
+    return builtInIconCache.getOrPut(fileName) {
+        when (fileName) {
+            "contract.sol",
+            "LICENSE",
+            "NOTICE" -> Icon.ResourceIcon(text)
+            "gradlew",
+            "gradlew.bat" -> Icon.ResourceIcon(gradle)
+            "README.md" -> Icon.ResourceIcon(info)
+
+            else -> {
+                val ext = fileName.substringAfterLast('.', "")
+                val type = FileTypeManager.fromExtension(ext)
+                type.iconOverride?.get(ext) ?: type.icon ?: Icon.ResourceIcon(plain_file)
+            }
         }
     }
+}
 
 private fun getBuiltInFileIcon(file: FileObject): Icon = getBuiltInFileIcon(file.getName())

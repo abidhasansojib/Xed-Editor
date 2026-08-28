@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
@@ -14,13 +15,22 @@ import com.rk.file.FileObject
 import java.io.Serializable
 import java.util.concurrent.ConcurrentHashMap
 
-@Entity(tableName = "files")
-data class FileMeta(@PrimaryKey val path: String, val fileName: String, val lastModified: Long, val size: Long) :
-    Serializable
+@Entity(
+    tableName = "files",
+    indices = [Index(value = ["fileName"])],
+)
+data class FileMeta(
+    @PrimaryKey val path: String,
+    val fileName: String,
+    val lastModified: Long,
+    val size: Long,
+) : Serializable
 
 @Dao
 interface FileMetaDao {
     @Query("SELECT * FROM files") suspend fun getAll(): List<FileMeta>
+
+    @Query("SELECT path FROM files") suspend fun getAllPaths(): List<String>
 
     @Query("SELECT * FROM files WHERE fileName LIKE '%' || :prefix || '%'")
     suspend fun search(prefix: String): List<FileMeta>
@@ -31,10 +41,15 @@ interface FileMetaDao {
 
     @Query("DELETE FROM files WHERE path = :path") suspend fun deleteByPath(path: String)
 
+    @Query("DELETE FROM files WHERE path IN (:paths)") suspend fun deleteByPaths(paths: List<String>)
+
     @Query("DELETE FROM files") suspend fun clear()
 }
 
-@Entity(tableName = "code_index")
+@Entity(
+    tableName = "code_index",
+    indices = [Index(value = ["path"])],
+)
 data class CodeLine(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val content: String,
@@ -57,10 +72,12 @@ interface CodeLineDao {
 
     @Query("DELETE FROM code_index WHERE path = :path") suspend fun deleteByPath(path: String)
 
+    @Query("DELETE FROM code_index WHERE path IN (:paths)") suspend fun deleteByPaths(paths: List<String>)
+
     @Query("DELETE FROM code_index") suspend fun clear()
 }
 
-@Database(entities = [CodeLine::class, FileMeta::class], version = 1, exportSchema = false)
+@Database(entities = [CodeLine::class, FileMeta::class], version = 2, exportSchema = false)
 abstract class IndexDatabase : RoomDatabase() {
     abstract fun codeIndexDao(): CodeLineDao
 
@@ -79,6 +96,7 @@ abstract class IndexDatabase : RoomDatabase() {
                             IndexDatabase::class.java,
                             "index_database_${projectRoot.hashCode()}",
                         )
+                        .fallbackToDestructiveMigration()
                         .build()
                         .apply {
                             this.projectRoot = projectRoot

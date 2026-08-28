@@ -26,7 +26,7 @@ object NewProjectAction : FileAction() {
         }
     }
 
-    override suspend fun isSupported(file: FileObject, root: FileObject?): Boolean {
+    override fun isSupported(file: FileObject, root: FileObject?): Boolean {
         return ProjectTemplateRegistry.categories.value.any { it.templates.isNotEmpty() }
     }
 

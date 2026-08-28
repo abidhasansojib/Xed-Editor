@@ -41,9 +41,9 @@ object FileActionProvider {
         _fileActions.remove(action)
     }
 
-    suspend fun getActions(file: FileObject, root: FileObject?) = getActions(listOf(file), root)
+    fun getActions(file: FileObject, root: FileObject?) = getActions(listOf(file), root)
 
-    suspend fun getActions(files: List<FileObject>, root: FileObject?): List<BaseFileAction> {
+    fun getActions(files: List<FileObject>, root: FileObject?): List<BaseFileAction> {
         if (files.isEmpty()) return emptyList()
 
         val suitableActions = mutableListOf<BaseFileAction>()
@@ -52,7 +52,7 @@ object FileActionProvider {
             val isBulkAction = files.size > 1
 
             if (action is MultiFileAction) {
-                val isSupported = action.isSupported(files,root)
+                val isSupported = action.isSupported(files, root)
                 if (!isSupported) return@forEach
 
                 val hasFolders = files.any { it.isDirectory() }
@@ -68,17 +68,17 @@ object FileActionProvider {
                 }
             } else if (!isBulkAction) {
                 val file = files.first()
-                val action = action as FileAction
+                val fileAction = action as FileAction
 
-                val isSupported = action.isSupported(file,root)
+                val isSupported = fileAction.isSupported(file, root)
                 if (!isSupported) return@forEach
 
-                val isRootAction = file == root && action.type.rootFolder
-                val isFileAction = file.isFile() && action.type.file
-                val isFolderAction = file.isDirectory() && action.type.folder
+                val isRootAction = file == root && fileAction.type.rootFolder
+                val isFileAction = file.isFile() && fileAction.type.file
+                val isFolderAction = file.isDirectory() && fileAction.type.folder
 
                 if (isRootAction || isFileAction || isFolderAction) {
-                    suitableActions.add(action)
+                    suitableActions.add(fileAction)
                 }
             }
         }

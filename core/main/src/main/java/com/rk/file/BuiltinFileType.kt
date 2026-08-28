@@ -121,19 +121,45 @@ interface FileType {
  */
 object FileTypeManager {
     private val dynamicRegistry = mutableListOf<FileType>()
+    private val extensionMap = java.util.concurrent.ConcurrentHashMap<String, FileType>()
+    private val nameMap = java.util.concurrent.ConcurrentHashMap<String, FileType>()
+    private val markdownMap = java.util.concurrent.ConcurrentHashMap<String, FileType>()
+    private val scopeMap = java.util.concurrent.ConcurrentHashMap<String, FileType>()
+
+    init {
+        rebuildLookupMaps()
+    }
+
+    private fun rebuildLookupMaps() {
+        extensionMap.clear()
+        nameMap.clear()
+        markdownMap.clear()
+        scopeMap.clear()
+
+        val all = BuiltinFileType.entries + dynamicRegistry
+        for (type in all) {
+            type.names?.forEach { n -> nameMap[n.lowercase()] = type }
+            type.extensions.forEach { ext -> extensionMap[ext.lowercase().removePrefix(".")] = type }
+            type.markdownNames.forEach { m -> markdownMap[m.lowercase()] = type }
+            type.textmateScope?.let { s -> scopeMap[s] = type }
+        }
+    }
 
     /** Register a new file type dynamically. */
     @XedExtensionPoint
     fun register(fileType: FileType) {
         if (!dynamicRegistry.contains(fileType)) {
             dynamicRegistry.add(fileType)
+            rebuildLookupMaps()
         }
     }
 
     /** Unregister a file type. */
     @XedExtensionPoint
     fun unregister(fileType: FileType) {
-        dynamicRegistry.remove(fileType)
+        if (dynamicRegistry.remove(fileType)) {
+            rebuildLookupMaps()
+        }
     }
 
     /** Get all dynamically registered file types + built-in file types together */
@@ -141,29 +167,29 @@ object FileTypeManager {
 
     fun fromFileName(name: String): FileType {
         val normalized = name.lowercase()
+        nameMap[normalized]?.let { return it }
         val fileExt = normalized.substringAfterLast('.', "")
-        return allTypes().firstOrNull { it.names != null && normalized in it.names!! } ?: fromExtension(fileExt)
+        return fromExtension(fileExt)
     }
 
     fun fromExtension(ext: String): FileType {
         val normalized = ext.lowercase().removePrefix(".")
-        return allTypes().firstOrNull { normalized in it.extensions } ?: BuiltinFileType.UNKNOWN
+        return extensionMap[normalized] ?: BuiltinFileType.UNKNOWN
     }
 
     fun fromMarkdownName(name: String): FileType {
         val normalized = name.lowercase()
-        return allTypes().firstOrNull { normalized in it.extensions || normalized in it.markdownNames }
-            ?: BuiltinFileType.UNKNOWN
+        return markdownMap[normalized] ?: extensionMap[normalized] ?: BuiltinFileType.UNKNOWN
     }
 
     fun fromScope(scope: String?): FileType {
         if (scope == null) return BuiltinFileType.UNKNOWN
-        return allTypes().firstOrNull { it.textmateScope == scope } ?: BuiltinFileType.UNKNOWN
+        return scopeMap[scope] ?: BuiltinFileType.UNKNOWN
     }
 
     fun knowsExtension(ext: String): Boolean {
         val normalized = ext.lowercase().removePrefix(".")
-        return allTypes().any { normalized in it.extensions }
+        return extensionMap.containsKey(normalized)
     }
 }
 

@@ -108,24 +108,23 @@ object FileOperations {
      * @return A [Result] containing a [Boolean] indicating whether the deletion was successful.
      */
     suspend fun deleteFile(file: FileObject) = runCatching {
+        if (!file.exists()) {
+            return@runCatching
+        }
         var size = 0
         val directory = file.isDirectory()
-        if (directory){
-           size = file.listFiles().size
+        if (directory) {
+            size = file.listFiles().size
         }
 
-
-        //NOTE: Deletes everything recursively
+        // NOTE: Deletes everything recursively
         val success = file.delete()
-        if (!success) {
-
-            if (directory && size != file.listFiles().size){
-                //Something got deleted we will report it as success
-            }else{
+        if (!success && file.exists()) {
+            if (directory && size != file.listFiles().size) {
+                // Something got deleted we will report it as success
+            } else {
                 throw IllegalStateException("Failed to delete file")
             }
-
-
         }
     }
 

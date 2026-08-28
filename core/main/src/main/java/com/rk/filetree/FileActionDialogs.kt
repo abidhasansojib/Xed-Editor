@@ -27,9 +27,11 @@ import com.rk.resources.getFilledString
 import com.rk.resources.getString
 import com.rk.resources.strings
 import com.rk.settings.Settings
+import androidx.lifecycle.viewModelScope
 import com.rk.utils.errorDialog
 import com.rk.utils.toast
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Composable
@@ -111,43 +113,40 @@ fun FileActionDialogs(
         DeleteConfirmationDialog(
             files = files,
             onConfirm = {
-                scope.launch {
-                    for (file in files) {
-                        val path = file.getAbsolutePath()
-                        viewModel.withFileOperation {
+                viewModel.viewModelScope.launch(Dispatchers.IO) {
+                    val affectedParents = mutableSetOf<FileObject>()
+                    viewModel.withFileOperation {
+                        for (file in files) {
+                            val path = file.getAbsolutePath()
                             FileOperations.deleteFile(file)
                                 .onFailure {
                                     toast(it.message ?: strings.delete_failed.getString())
-                                    val parentFile = file.getParentFile()
-                                    if (parentFile != null) {
-                                        viewModel.updateCache(file.getParentFile()!!)
-                                    }else{
-                                        viewModel.updateCache(file)
-                                    }
                                 }
                                 .onSuccess {
                                     Events.publish(FileEvent.Deleted(path))
                                     val parentFile = file.getParentFile()
                                     if (parentFile != null) {
-                                        viewModel.updateCache(file.getParentFile()!!)
-                                    }else{
-                                        viewModel.updateCache(file)
+                                        affectedParents.add(parentFile)
+                                    } else {
+                                        affectedParents.add(file)
                                     }
 
                                     if (file == root) {
                                         drawerViewModel.removeFileTreeTab(file, true)
                                     }
 
-                                    MainActivity.instance?.viewModel?.also { viewModel ->
-                                        viewModel.tabs.forEachIndexed { index, tab ->
-                                            if (tab.file == file) {
-                                                viewModel.tabManager.removeTab(index)
-                                            }
+                                    MainActivity.instance?.viewModel?.also { mainVM ->
+                                        mainVM.tabs.filter { tab ->
+                                            val tabPath = tab.file?.getAbsolutePath() ?: ""
+                                            tab.file == file || (tabPath.isNotEmpty() && (tabPath == path || tabPath.startsWith("$path/")))
+                                        }.forEach { tab ->
+                                            mainVM.tabManager.removeTab(tab)
                                         }
                                     }
                                 }
                         }
                     }
+                    affectedParents.forEach { viewModel.updateCache(it) }
                 }
                 viewModel.closeDeleteConfirmation()
             },

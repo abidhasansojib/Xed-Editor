@@ -83,25 +83,44 @@ class CodeSearchDirect(
                 file.useInputStream { inputStream ->
                     inputStream.bufferedReader(charset).useLines { lineSequence ->
                         lineSequence.forEachIndexed { lineIndex, line ->
-                            val chunks = line.chunked(MAX_CHUNK_SIZE)
-                            chunks.forEachIndexed { chunkIndex, chunk ->
-                                val indices = SearchUtils.findAllIndices(chunk, query, ignoreCase = ignoreCase)
+                            if (line.length <= MAX_CHUNK_SIZE) {
+                                val indices = SearchUtils.findAllIndices(line, query, ignoreCase = ignoreCase)
                                 for (index in indices) {
-                                    currentCoroutineContext().ensureActive()
-                                    val absoluteCharIndex = (chunkIndex * MAX_CHUNK_SIZE) + index
                                     currentCoroutineContext().ensureActive()
                                     sendFn(
                                         SearchUtils.createCodeItem(
                                             context = context,
                                             mainViewModel = mainViewModel,
-                                            text = chunk,
-                                            charIndex = absoluteCharIndex,
+                                            text = line,
+                                            charIndex = index,
                                             query = query,
                                             file = file,
                                             projectRoot = projectRoot,
                                             lineIndex = lineIndex,
                                         )
                                     )
+                                }
+                            } else {
+                                val chunks = line.chunked(MAX_CHUNK_SIZE)
+                                chunks.forEachIndexed { chunkIndex, chunk ->
+                                    val indices = SearchUtils.findAllIndices(chunk, query, ignoreCase = ignoreCase)
+                                    for (index in indices) {
+                                        currentCoroutineContext().ensureActive()
+                                        val absoluteCharIndex = (chunkIndex * MAX_CHUNK_SIZE) + index
+                                        currentCoroutineContext().ensureActive()
+                                        sendFn(
+                                            SearchUtils.createCodeItem(
+                                                context = context,
+                                                mainViewModel = mainViewModel,
+                                                text = chunk,
+                                                charIndex = absoluteCharIndex,
+                                                query = query,
+                                                file = file,
+                                                projectRoot = projectRoot,
+                                                lineIndex = lineIndex,
+                                            )
+                                        )
+                                    }
                                 }
                             }
                         }

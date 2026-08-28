@@ -115,16 +115,26 @@ fun TerminalScreen(
 
     fun launchUserSelectionOrSession(isNewTab: Boolean) {
         val defaultUser = (initialUser ?: Settings.droidspaces_terminal_default_user).trim()
-        if (defaultUser.isNotEmpty() && !isNewTab) {
+        if (defaultUser.isNotEmpty()) {
             val client = TerminalBackEnd()
             val isAndroidRoot = defaultUser == DroidspacesConstants.ANDROID_ROOT_USER
-            DroidspacesTerminalSessionManager.getOrCreateSession(
-                context = context,
-                client = client,
-                containerName = if (isAndroidRoot) DroidspacesConstants.ANDROID_CONTAINER_NAME else containerName,
-                user = defaultUser,
-                initialCommand = initialCommand,
-            )
+            val targetContainer = if (isAndroidRoot) DroidspacesConstants.ANDROID_CONTAINER_NAME else containerName
+            if (isNewTab) {
+                DroidspacesTerminalSessionManager.createNewTabSession(
+                    context = context,
+                    client = client,
+                    containerName = targetContainer,
+                    user = defaultUser,
+                )
+            } else {
+                DroidspacesTerminalSessionManager.getOrCreateSession(
+                    context = context,
+                    client = client,
+                    containerName = targetContainer,
+                    user = defaultUser,
+                    initialCommand = initialCommand,
+                )
+            }
             isTerminalReady = true
             terminalActivity.changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
         } else {

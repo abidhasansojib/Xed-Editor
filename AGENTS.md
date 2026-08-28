@@ -90,6 +90,32 @@
     * Implemented thread-safe LRU caches in `InlineMarkdown` and `LaTeXParser`, eliminating CommonMark AST parsing, regex evaluation, and string allocations on every scroll frame.
     * Removed `mutableStateOf` from coordinate tracking in `MarkdownScrollController` to eliminate scroll-time recomposition invalidations.
 
+14. **Project Multi-Selection & Batch Deletion Fix (`FileTree.kt`, `FileActionDialogs.kt` & `FileTreeViewModel.kt`):**
+    * Fixed bug where selecting multiple files in the project drawer tree and tapping Delete only deleted the first selected file.
+    * Made `SelectionActions` in `FileTree.kt` receive the reactive `selectedFiles` list state as a parameter so Compose properly recomposes and updates the toolbar/dropdown action list when items are added to or removed from multi-selection.
+    * Fixed single vs multi-file action filtering to correctly dynamically present bulk actions (Delete, Copy, Cut, Refresh) when multiple files are selected.
+    * Improved batch deletion in `FileActionDialogs.kt` to safely execute batch file deletion, safely close matching open editor tabs using `tabManager.removeTab(tab)` without index shifting, and batch-refresh parent folder caches.
+    * Guarded `selectFile` in `FileTreeViewModel.kt` against duplicate additions.
+
+15. **Terminal New Tab Default User Fix (`TerminalScreen.kt`):**
+    * Fixed bug where tapping the `+` button in terminal prompted for user selection even when a default terminal user was configured in settings.
+    * Updated `launchUserSelectionOrSession` to automatically use the configured default terminal user when spawning new tabs (`isNewTab = true`), only presenting the user selection sheet if the default user is set to "Ask every time" (`""`).
+
+16. **App-Wide Performance & Memory Optimizations:**
+    * **O(1) FileType Resolution (`BuiltinFileType.kt`):** Replaced linear registry iteration and repetitive list allocations with precomputed concurrent hash maps (`extensionMap`, `nameMap`, `markdownMap`, `scopeMap`) in `FileTypeManager`, making file type and syntax scope lookups instantaneous $O(1)$ with zero allocations.
+    * **File Icon Memoization (`FileIcon.kt`):** Added thread-safe `builtInIconCache` for built-in file icons and reordered file system checks to verify `file.isDirectory()` prior to `file.isFile()`, avoiding unnecessary stat/I/O operations during tree rendering.
+    * **Markdown Syntax Highlighter Caching (`CodeHighlighter.kt`):** Implemented `highlighterCache` mapping TextMate scopes to `(TextMateLanguage, ColorScheme)` pairs, eliminating redundant language parser and theme re-instantiations on every rendered code block.
+    * **Regex & Map Allocation Pruning in Markdown/LaTeX (`InlineMarkdown.kt` & `LaTeXParser.kt`):** Pre-compiled regular expressions (`OBSIDIAN_COMMENT_REGEX`, `SAMP_REGEX`, `VAR_REGEX`, `TAG_STRIP_REGEX`) and extracted mathematical character mapping tables (`BLACKBOARD_BOLD_MAP`, `CALLIGRAPHIC_MAP`, `FRAKTUR_MAP`, `SUPERSCRIPT_MAP`) as static singletons, eliminating thousands of runtime allocations during parsing and scrolling.
+    * **Zero-Copy Line Streaming in Code Search & Indexer (`CodeSearchDirect.kt` & `ProjectIndexer.kt`):** Bypassed unnecessary `chunked()` list allocations for standard-sized lines during recursive direct search and background Room database indexing.
+    * **Safe Buffer Sampling (`SearchUtils.kt`):** Guarded stream char sampling in `isFileSearchable()` against negative buffer lengths and empty file exceptions.
+
+17. **Heavy Project Indexing & Room Database Crash Prevention (`ProjectIndexer.kt` & `IndexDatabase.kt`):**
+    * **Stack-Safe Iterative Traversal:** Converted recursive directory walking to an iterative `ArrayDeque` work queue with maximum depth bounding (64 levels) and visited directory cycle detection (`visitedDirs`), preventing `StackOverflowError` and infinite loops from symlinks or circular mounts.
+    * **Flat Heap Memory Management:** Implemented periodic batch insertion (500 items) for both `FileMeta` and `CodeLine` during directory crawling, preventing unbounded in-memory collection growth and `OutOfMemoryError` on projects with 50k+ files.
+    * **Room Database Table Indexing:** Added composite indexes on `CodeLine.path` and `FileMeta.fileName`, turning $O(N)$ full table scans during file updates/deletions into $O(\log N)$ B-tree lookups.
+    * **Chunked Batch Deletions:** Replaced single-item deletion loops with batch `deleteByPaths(chunk)` queries, preventing SQLite parameter overflows and transaction lock timeouts.
+    * **Migration Resilience:** Enabled `fallbackToDestructiveMigration()` on `IndexDatabase` for clean automatic recovery on schema upgrades.
+
 ---
 
 ### 📋 What's Next (Upcoming Priorities)

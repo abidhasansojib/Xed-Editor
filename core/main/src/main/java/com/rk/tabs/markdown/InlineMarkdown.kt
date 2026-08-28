@@ -51,6 +51,10 @@ object InlineMarkdown {
 
     private val BLOCK_MATH_REGEX = Regex("(?<!\\\\)\\$\\$([\\s\\S]+?)(?<!\\\\)\\$\\$")
     private val INLINE_MATH_REGEX = Regex("(?<!\\\\)\\$(?!\\s)([^$\\n]+?)(?<!\\s)(?<!\\\\)\\$")
+    private val OBSIDIAN_COMMENT_REGEX = Regex("%%[\\s\\S]*?%%")
+    private val SAMP_REGEX = Regex("<samp>|</samp>", RegexOption.IGNORE_CASE)
+    private val VAR_REGEX = Regex("<var>|</var>", RegexOption.IGNORE_CASE)
+    private val TAG_STRIP_REGEX = Regex("<[^>]+>")
 
     // Common GitHub & Markdown Emoji Shortcode Map
     private val EMOJI_MAP =
@@ -151,7 +155,7 @@ object InlineMarkdown {
         var textWithPlaceholders = text
 
         // Strip Obsidian comments %% ... %%
-        textWithPlaceholders = textWithPlaceholders.replace(Regex("%%[\\s\\S]*?%%"), "")
+        textWithPlaceholders = textWithPlaceholders.replace(OBSIDIAN_COMMENT_REGEX, "")
 
         // Extract display math $$...$$ first
         textWithPlaceholders =
@@ -516,25 +520,25 @@ object InlineMarkdown {
             trimmed.startsWith("<br", ignoreCase = true) -> append("\n")
             trimmed.startsWith("<hr", ignoreCase = true) -> append("\n---\n")
             trimmed.startsWith("<samp>", ignoreCase = true) -> {
-                val cleaned = trimmed.replace(Regex("<samp>|</samp>", RegexOption.IGNORE_CASE), "")
+                val cleaned = trimmed.replace(SAMP_REGEX, "")
                 pushStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBgColor.copy(alpha = 0.5f)))
                 append(" $cleaned ")
                 pop()
             }
             trimmed.startsWith("<var>", ignoreCase = true) -> {
-                val cleaned = trimmed.replace(Regex("<var>|</var>", RegexOption.IGNORE_CASE), "")
+                val cleaned = trimmed.replace(VAR_REGEX, "")
                 pushStyle(SpanStyle(fontStyle = FontStyle.Italic, color = primaryColor))
                 append(cleaned)
                 pop()
             }
             trimmed.startsWith("<abbr", ignoreCase = true) -> {
-                val cleaned = trimmed.replace(Regex("<[^>]+>"), "")
+                val cleaned = trimmed.replace(TAG_STRIP_REGEX, "")
                 pushStyle(SpanStyle(textDecoration = TextDecoration.Underline, fontWeight = FontWeight.Medium))
                 append(cleaned)
                 pop()
             }
             else -> {
-                val cleaned = trimmed.replace(Regex("<[^>]+>"), "")
+                val cleaned = trimmed.replace(TAG_STRIP_REGEX, "")
                 if (cleaned.isNotEmpty()) {
                     append(cleaned)
                 }

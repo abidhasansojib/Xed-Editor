@@ -20,8 +20,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.charset.Charset
+import java.util.ArrayDeque
 
-/** Manages indexing for a single project with proper lifecycle management. */
+/** Manages indexing for a single project with robust lifecycle and memory management. */
 class ProjectIndexer(
     private val context: Context,
     private val projectRoot: FileObject,
@@ -31,16 +32,15 @@ class ProjectIndexer(
     private val viewModelScope: CoroutineScope,
 ) {
     companion object {
-        private const val CODE_BATCH_SIZE = 5_000
+        private const val DB_BATCH_SIZE = 500
         private const val MAX_CHUNK_SIZE = 1_000_000
-        private const val MAX_FILE_SIZE_SEARCH = 10_000_000
+        private const val MAX_DIRECTORY_DEPTH = 64
     }
 
     private var indexingJob: Job? = null
 
     /**
-     * Starts full indexing of the project. Cancels any previous indexing job first. Index stores ALL files and code (no
-     * filtering by file_mask or excluder).
+     * Starts full indexing of the project. Cancels any previous indexing job first.
      */
     suspend fun startIndexing() {
         indexingJob?.cancelAndJoin()
@@ -64,19 +64,27 @@ class ProjectIndexer(
 
                     val indexedFiles = fileMetaDao.getAll().associateBy { it.path }
                     val pathsToKeep = mutableSetOf<String>()
-                    val newCodeLines = mutableListOf<CodeLine>()
-                    val newFileMetas = mutableListOf<FileMeta>()
+                    val codeLineBuffer = mutableListOf<CodeLine>()
+                    val fileMetaBuffer = mutableListOf<FileMeta>()
 
-                    indexRecursively(projectRoot, indexedFiles, pathsToKeep, newCodeLines, newFileMetas, codeLineDao)
+                    indexProjectIterative(
+                        root = projectRoot,
+                        indexedFiles = indexedFiles,
+                        pathsToKeep = pathsToKeep,
+                        codeLineBuffer = codeLineBuffer,
+                        fileMetaBuffer = fileMetaBuffer,
+                        codeLineDao = codeLineDao,
+                        fileMetaDao = fileMetaDao,
+                    )
 
                     finalizeIndex(
-                        database,
-                        indexedFiles,
-                        pathsToKeep,
-                        codeLineDao,
-                        fileMetaDao,
-                        newCodeLines,
-                        newFileMetas,
+                        database = database,
+                        indexedFiles = indexedFiles,
+                        pathsToKeep = pathsToKeep,
+                        codeLineDao = codeLineDao,
+                        fileMetaDao = fileMetaDao,
+                        remainingCodeLines = codeLineBuffer,
+                        remainingFileMetas = fileMetaBuffer,
                     )
 
                     logDebug("Indexing completed for $projectRoot")
@@ -116,34 +124,37 @@ class ProjectIndexer(
                     val allIndexedFiles = fileMetaDao.getAll().associateBy { it.path }
 
                     // Only consider files under the changed path
+                    val targetPrefix = file.getAbsolutePath()
                     val relevantIndexedFiles =
                         if (file == projectRoot) {
                             allIndexedFiles
                         } else {
-                            allIndexedFiles.filter { it.key.startsWith(file.getAbsolutePath()) }
+                            allIndexedFiles.filter { it.key == targetPrefix || it.key.startsWith("$targetPrefix/") }
                         }
 
                     val pathsToKeep = mutableSetOf<String>()
-                    val newCodeLines = mutableListOf<CodeLine>()
-                    val newFileMetas = mutableListOf<FileMeta>()
+                    val codeLineBuffer = mutableListOf<CodeLine>()
+                    val fileMetaBuffer = mutableListOf<FileMeta>()
 
                     if (file.isDirectory()) {
-                        indexRecursively(
-                            parent = file,
+                        indexProjectIterative(
+                            root = file,
                             indexedFiles = relevantIndexedFiles,
                             pathsToKeep = pathsToKeep,
-                            codeLineResults = newCodeLines,
-                            fileMetaResults = newFileMetas,
+                            codeLineBuffer = codeLineBuffer,
+                            fileMetaBuffer = fileMetaBuffer,
                             codeLineDao = codeLineDao,
+                            fileMetaDao = fileMetaDao,
                         )
                     } else {
-                        indexFile(
+                        indexSingleFile(
                             file = file,
                             indexedFiles = relevantIndexedFiles,
                             pathsToKeep = pathsToKeep,
-                            codeLineResults = newCodeLines,
-                            fileMetaResults = newFileMetas,
+                            codeLineBuffer = codeLineBuffer,
+                            fileMetaBuffer = fileMetaBuffer,
                             codeLineDao = codeLineDao,
+                            fileMetaDao = fileMetaDao,
                         )
                     }
 
@@ -153,8 +164,8 @@ class ProjectIndexer(
                         pathsToKeep = pathsToKeep,
                         codeLineDao = codeLineDao,
                         fileMetaDao = fileMetaDao,
-                        newCodeLines = newCodeLines,
-                        newFileMetas = newFileMetas,
+                        remainingCodeLines = codeLineBuffer,
+                        remainingFileMetas = fileMetaBuffer,
                     )
 
                     logDebug("Sync completed for $file")
@@ -216,79 +227,111 @@ class ProjectIndexer(
         }
     }
 
-    private suspend fun indexRecursively(
-        parent: FileObject,
+    private data class DirTask(val dir: FileObject, val depth: Int, val isParentHidden: Boolean)
+
+    /** Iterative, stack-safe traversal with cycle and depth detection. */
+    private suspend fun indexProjectIterative(
+        root: FileObject,
         indexedFiles: Map<String, FileMeta>,
         pathsToKeep: MutableSet<String>,
-        codeLineResults: MutableList<CodeLine>,
-        fileMetaResults: MutableList<FileMeta>,
+        codeLineBuffer: MutableList<CodeLine>,
+        fileMetaBuffer: MutableList<FileMeta>,
         codeLineDao: CodeLineDao,
-        isResultHidden: Boolean = false,
+        fileMetaDao: FileMetaDao,
     ) {
-        try {
-            val childFiles = parent.listFiles()
+        val queue = ArrayDeque<DirTask>()
+        val visitedDirs = HashSet<String>()
+
+        val rootPath = root.getAbsolutePath()
+        visitedDirs.add(rootPath)
+        queue.add(DirTask(root, 0, root.getName().startsWith(".")))
+
+        while (queue.isNotEmpty()) {
+            currentCoroutineContext().ensureActive()
+            val (currentDir, currentDepth, isParentHidden) = queue.removeFirst()
+
+            if (currentDepth > MAX_DIRECTORY_DEPTH) {
+                logWarn("Skipping directory exceeding max depth: ${currentDir.getAbsolutePath()}")
+                continue
+            }
+
+            val childFiles = try {
+                currentDir.listFiles()
+            } catch (e: Exception) {
+                logError(e, "Failed to list children for ${currentDir.getAbsolutePath()}")
+                emptyList()
+            }
 
             for (file in childFiles) {
                 currentCoroutineContext().ensureActive()
-                indexFile(
-                    file = file,
-                    indexedFiles = indexedFiles,
-                    pathsToKeep = pathsToKeep,
-                    codeLineResults = codeLineResults,
-                    fileMetaResults = fileMetaResults,
-                    codeLineDao = codeLineDao,
-                    isResultHidden = isResultHidden,
-                )
+
+                val path = file.getAbsolutePath()
+                val fileName = file.getName()
+                val isHidden = fileName.startsWith(".") || isParentHidden
+
+                if (isHidden && !Settings.show_hidden_files_search) continue
+                if (excluder.isExcluded(path)) continue
+
+                val isDir = file.isDirectory()
+
+                if (isDir) {
+                    if (!visitedDirs.contains(path)) {
+                        visitedDirs.add(path)
+                        queue.add(DirTask(file, currentDepth + 1, isHidden))
+                    }
+                } else {
+                    indexSingleFile(
+                        file = file,
+                        indexedFiles = indexedFiles,
+                        pathsToKeep = pathsToKeep,
+                        codeLineBuffer = codeLineBuffer,
+                        fileMetaBuffer = fileMetaBuffer,
+                        codeLineDao = codeLineDao,
+                        fileMetaDao = fileMetaDao,
+                    )
+                }
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            logError(e, "Error during recursive indexing")
         }
     }
 
-    private suspend fun indexFile(
+    private suspend fun indexSingleFile(
         file: FileObject,
         indexedFiles: Map<String, FileMeta>,
         pathsToKeep: MutableSet<String>,
-        codeLineResults: MutableList<CodeLine>,
-        fileMetaResults: MutableList<FileMeta>,
+        codeLineBuffer: MutableList<CodeLine>,
+        fileMetaBuffer: MutableList<FileMeta>,
         codeLineDao: CodeLineDao,
-        isResultHidden: Boolean = false,
+        fileMetaDao: FileMetaDao,
     ) {
         try {
-            val isHidden = file.getName().startsWith(".") || isResultHidden
-            if (isHidden && !Settings.show_hidden_files_search) return
-
             val path = file.getAbsolutePath()
             val lastModified = file.lastModified() ?: 0L
-
-            if (excluder.isExcluded(path)) return
+            val fileLength = file.length()
 
             val indexedFile = indexedFiles[path]
             val isFileModified =
-                indexedFile == null || indexedFile.lastModified != lastModified || indexedFile.size != file.length()
+                indexedFile == null || indexedFile.lastModified != lastModified || indexedFile.size != fileLength
 
             if (!isFileModified) {
                 pathsToKeep += path
-                if (!file.isDirectory()) return
-            } else {
-                fileMetaResults.add(
-                    FileMeta(path = path, fileName = file.getName(), lastModified = lastModified, size = file.length())
-                )
+                return
             }
 
-            if (file.isDirectory()) {
-                indexRecursively(
-                    parent = file,
-                    indexedFiles = indexedFiles,
-                    pathsToKeep = pathsToKeep,
-                    codeLineResults = codeLineResults,
-                    fileMetaResults = fileMetaResults,
-                    codeLineDao = codeLineDao,
-                    isResultHidden = isHidden,
-                )
-                return
+            pathsToKeep += path
+
+            // Delete old code lines for this file if it was previously indexed and modified
+            if (indexedFile != null) {
+                codeLineDao.deleteByPath(path)
+            }
+
+            fileMetaBuffer.add(
+                FileMeta(path = path, fileName = file.getName(), lastModified = lastModified, size = fileLength)
+            )
+
+            // Flush file meta buffer in manageable batches to prevent memory spikes
+            if (fileMetaBuffer.size >= DB_BATCH_SIZE) {
+                fileMetaDao.insertAll(fileMetaBuffer)
+                fileMetaBuffer.clear()
             }
 
             if (!SearchUtils.isFileSearchable(file)) return
@@ -299,21 +342,35 @@ class ProjectIndexer(
                     lineSequence.forEachIndexed { lineIndex, line ->
                         currentCoroutineContext().ensureActive()
 
-                        val chunks = line.chunked(MAX_CHUNK_SIZE)
-                        chunks.forEachIndexed { chunkIndex, chunk ->
-                            codeLineResults.add(
+                        if (line.length <= MAX_CHUNK_SIZE) {
+                            codeLineBuffer.add(
                                 CodeLine(
-                                    content = chunk,
+                                    content = line,
                                     path = path,
                                     lineNumber = lineIndex,
-                                    chunkStart = chunkIndex * MAX_CHUNK_SIZE,
+                                    chunkStart = 0,
                                 )
                             )
+                            if (codeLineBuffer.size >= DB_BATCH_SIZE) {
+                                codeLineDao.insertAll(codeLineBuffer)
+                                codeLineBuffer.clear()
+                            }
+                        } else {
+                            val chunks = line.chunked(MAX_CHUNK_SIZE)
+                            chunks.forEachIndexed { chunkIndex, chunk ->
+                                codeLineBuffer.add(
+                                    CodeLine(
+                                        content = chunk,
+                                        path = path,
+                                        lineNumber = lineIndex,
+                                        chunkStart = chunkIndex * MAX_CHUNK_SIZE,
+                                    )
+                                )
 
-                            // Flush batch to avoid OOM
-                            if (codeLineResults.size > CODE_BATCH_SIZE) {
-                                codeLineDao.insertAll(codeLineResults)
-                                codeLineResults.clear()
+                                if (codeLineBuffer.size >= DB_BATCH_SIZE) {
+                                    codeLineDao.insertAll(codeLineBuffer)
+                                    codeLineBuffer.clear()
+                                }
                             }
                         }
                     }
@@ -332,29 +389,40 @@ class ProjectIndexer(
         pathsToKeep: MutableSet<String>,
         codeLineDao: CodeLineDao,
         fileMetaDao: FileMetaDao,
-        newCodeLines: MutableList<CodeLine>,
-        newFileMetas: MutableList<FileMeta>,
+        remainingCodeLines: MutableList<CodeLine>,
+        remainingFileMetas: MutableList<FileMeta>,
     ) {
         return withContext(Dispatchers.IO) {
             try {
                 currentCoroutineContext().ensureActive()
 
-                database.withTransaction {
-                    // Delete files that are no longer present or were modified
-                    val deletedPaths = indexedFiles.keys - pathsToKeep
-                    for (path in deletedPaths) {
-                        codeLineDao.deleteByPath(path)
-                        fileMetaDao.deleteByPath(path)
+                // Flush any remaining buffers
+                if (remainingCodeLines.isNotEmpty()) {
+                    for (chunk in remainingCodeLines.chunked(DB_BATCH_SIZE)) {
+                        codeLineDao.insertAll(chunk)
                     }
+                    remainingCodeLines.clear()
+                }
 
-                    // Insert new/updated entries
-                    if (newCodeLines.isNotEmpty()) {
-                        codeLineDao.insertAll(newCodeLines)
+                if (remainingFileMetas.isNotEmpty()) {
+                    for (chunk in remainingFileMetas.chunked(DB_BATCH_SIZE)) {
+                        fileMetaDao.insertAll(chunk)
                     }
-                    if (newFileMetas.isNotEmpty()) {
-                        fileMetaDao.insertAll(newFileMetas)
+                    remainingFileMetas.clear()
+                }
+
+                // Batch delete removed files
+                val deletedPaths = (indexedFiles.keys - pathsToKeep).toList()
+                if (deletedPaths.isNotEmpty()) {
+                    database.withTransaction {
+                        for (chunk in deletedPaths.chunked(250)) {
+                            codeLineDao.deleteByPaths(chunk)
+                            fileMetaDao.deleteByPaths(chunk)
+                        }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logError(e, "Error finalizing index")
                 throw e

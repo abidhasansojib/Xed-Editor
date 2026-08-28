@@ -75,7 +75,10 @@ fun FileTree(
 ) {
     val sortMode by viewModel.sortMode.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val selectedFilesMap by viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val selectedFiles = selectedFilesMap[rootNode.file] ?: emptyList()
+    val isAnyFileSelected = selectedFiles.isNotEmpty()
+    val selectionCount = selectedFiles.size
     val fileOperationsCount by viewModel.fileOperationsCount.collectAsStateWithLifecycle()
     val searchVM = searchViewModel.get()
     val isIndexingMap =
@@ -85,8 +88,6 @@ fun FileTree(
             emptyMap()
         }
     val isIndexingRoot = isIndexingMap[rootNode.file] == true
-    val isAnyFileSelected = selectedFiles[rootNode.file]?.isNotEmpty() == true
-    val selectionCount = selectedFiles[rootNode.file]?.size ?: 0
     val isFileOperationInProgress = fileOperationsCount > 0
 
     // Auto-expand root node on first composition
@@ -128,7 +129,12 @@ fun FileTree(
                 modifier = Modifier.weight(1f),
             ) {
                 if (isAnyFileSelected) {
-                    SelectionActions(viewModel, drawerViewModel, rootNode)
+                    SelectionActions(
+                        selectedFiles = selectedFiles,
+                        viewModel = viewModel,
+                        drawerViewModel = drawerViewModel,
+                        rootNode = rootNode,
+                    )
                 } else {
                     FileTreeActions(viewModel, onSearchClick)
                 }
@@ -171,28 +177,29 @@ fun FileTree(
 }
 
 @Composable
-private fun SelectionActions(viewModel: FileTreeViewModel, drawerViewModel: DrawerViewModel, rootNode: FileTreeNode) {
-    val selectedFiles = viewModel.getSelectedFiles(rootNode.file)
-    val scope = rememberCoroutineScope()
-    var actions by remember(selectedFiles, rootNode.file) { mutableStateOf<List<BaseFileAction>>(emptyList()) }
-    var enabledActions by remember(selectedFiles, rootNode.file) { mutableStateOf<Set<BaseFileAction>>(emptySet()) }
-    var expanded by remember { mutableStateOf(false) }
-
-    LaunchedEffect(selectedFiles, rootNode.file) {
-        actions = FileActionProvider.getActions(selectedFiles, rootNode.file)
-    }
-    LaunchedEffect(actions, selectedFiles, rootNode.file) {
-        enabledActions =
+private fun SelectionActions(
+    selectedFiles: List<FileObject>,
+    viewModel: FileTreeViewModel,
+    drawerViewModel: DrawerViewModel,
+    rootNode: FileTreeNode,
+) {
+    val actions =
+        remember(selectedFiles, rootNode.file) {
+            FileActionProvider.getActions(selectedFiles, rootNode.file)
+        }
+    val enabledActions =
+        remember(actions, selectedFiles, rootNode.file) {
             actions
                 .filter { action ->
                     when (action) {
-                        is FileAction -> action.isEnabled(selectedFiles.first(), rootNode.file)
+                        is FileAction -> if (selectedFiles.isNotEmpty()) action.isEnabled(selectedFiles.first(), rootNode.file) else false
                         is MultiFileAction -> action.isEnabled(selectedFiles, rootNode.file)
                         else -> true
                     }
                 }
                 .toSet()
-    }
+        }
+    var expanded by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -216,14 +223,13 @@ private fun SelectionActions(viewModel: FileTreeViewModel, drawerViewModel: Draw
             toolbarActions.forEach { action ->
                 when (action) {
                     is FileAction -> {
-                        val file = selectedFiles.first() // Is safe because of the check in getActions()
+                        val file = selectedFiles.firstOrNull() ?: return@forEach
                         IconButton(
                             enabled = action in enabledActions,
                             onClick = {
-                                val context =
+                                val actionContext =
                                     FileActionContext(file, rootNode.file, viewModel, drawerViewModel, context)
-                                scope.launch { action.execute(context) }
-
+                                viewModel.viewModelScope.launch { action.execute(actionContext) }
                                 viewModel.unselectAllFiles(rootNode.file)
                             },
                         ) {
@@ -234,16 +240,16 @@ private fun SelectionActions(viewModel: FileTreeViewModel, drawerViewModel: Draw
                         IconButton(
                             enabled = action in enabledActions,
                             onClick = {
-                                val context =
+                                val filesToActOn = viewModel.getSelectedFiles(rootNode.file).ifEmpty { selectedFiles }
+                                val actionContext =
                                     MultiFileActionContext(
-                                        selectedFiles,
+                                        filesToActOn,
                                         rootNode.file,
                                         viewModel,
                                         drawerViewModel,
                                         context,
                                     )
-                                scope.launch { action.execute(context) }
-
+                                viewModel.viewModelScope.launch { action.execute(actionContext) }
                                 viewModel.unselectAllFiles(rootNode.file)
                             },
                         ) {
@@ -263,13 +269,13 @@ private fun SelectionActions(viewModel: FileTreeViewModel, drawerViewModel: Draw
                         dropdownActions.forEach { action ->
                             when (action) {
                                 is FileAction -> {
-                                    val file = selectedFiles.first() // Is safe because of the check in getActions()
+                                    val file = selectedFiles.firstOrNull() ?: return@forEach
                                     XedDropdownMenuItem(
                                         text = { Text(action.title) },
                                         leadingIcon = { XedIcon(action.icon, contentDescription = action.title) },
                                         enabled = action in enabledActions,
                                         onClick = {
-                                            val context =
+                                            val actionContext =
                                                 FileActionContext(
                                                     file,
                                                     rootNode.file,
@@ -277,8 +283,7 @@ private fun SelectionActions(viewModel: FileTreeViewModel, drawerViewModel: Draw
                                                     drawerViewModel,
                                                     context,
                                                 )
-                                            scope.launch { action.execute(context) }
-
+                                            viewModel.viewModelScope.launch { action.execute(actionContext) }
                                             viewModel.unselectAllFiles(rootNode.file)
                                             expanded = false
                                         },
@@ -290,16 +295,16 @@ private fun SelectionActions(viewModel: FileTreeViewModel, drawerViewModel: Draw
                                         leadingIcon = { XedIcon(action.icon, contentDescription = action.title) },
                                         enabled = action in enabledActions,
                                         onClick = {
-                                            val context =
+                                            val filesToActOn = viewModel.getSelectedFiles(rootNode.file).ifEmpty { selectedFiles }
+                                            val actionContext =
                                                 MultiFileActionContext(
-                                                    selectedFiles,
+                                                    filesToActOn,
                                                     rootNode.file,
                                                     viewModel,
                                                     drawerViewModel,
                                                     context,
                                                 )
-                                            scope.launch { action.execute(context) }
-
+                                            viewModel.viewModelScope.launch { action.execute(actionContext) }
                                             viewModel.unselectAllFiles(rootNode.file)
                                             expanded = false
                                         },

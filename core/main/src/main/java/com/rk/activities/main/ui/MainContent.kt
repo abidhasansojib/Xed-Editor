@@ -444,12 +444,9 @@ private fun TabItemContent(
             DropdownMenu(expanded = showFileActionMenu, onDismissRequest = { showFileActionMenu = false }) {
                 val root = (tab as? EditorTab)?.projectRoot
                 val scope = rememberCoroutineScope()
-                var actions by remember(it) { mutableStateOf<List<BaseFileAction>>(emptyList()) }
-                var enabledActions by remember(it) { mutableStateOf<Set<BaseFileAction>>(emptySet()) }
-
-                LaunchedEffect(it, root) { actions = FileActionProvider.getActions(it, root) }
-                LaunchedEffect(actions, it, root) {
-                    enabledActions =
+                val actions = remember(it, root) { FileActionProvider.getActions(it, root) }
+                val enabledActions =
+                    remember(actions, it, root) {
                         actions
                             .filter { action ->
                                 when (action) {
@@ -459,7 +456,7 @@ private fun TabItemContent(
                                 }
                             }
                             .toSet()
-                }
+                    }
 
                 actions.forEach { action ->
                     when (action) {

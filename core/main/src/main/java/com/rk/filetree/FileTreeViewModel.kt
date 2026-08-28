@@ -223,7 +223,9 @@ class FileTreeViewModel : ViewModel() {
 
     fun selectFile(projectRoot: FileObject, fileObject: FileObject) {
         _selectedFiles.update { map ->
-            map + (projectRoot to ((map[projectRoot] ?: emptyList()) + fileObject))
+            val currentList = map[projectRoot] ?: emptyList()
+            if (fileObject in currentList) map
+            else map + (projectRoot to (currentList + fileObject))
         }
     }
 
