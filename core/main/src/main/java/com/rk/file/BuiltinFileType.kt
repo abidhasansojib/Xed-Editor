@@ -6,6 +6,7 @@ import com.rk.icons.pack.currentIconPack
 import com.rk.resources.drawables
 import com.rk.resources.getString
 import com.rk.resources.strings
+import java.util.concurrent.ConcurrentHashMap
 
 private val java = drawables.java
 private val html = drawables.html
@@ -121,10 +122,10 @@ interface FileType {
  */
 object FileTypeManager {
     private val dynamicRegistry = mutableListOf<FileType>()
-    private val extensionMap = java.util.concurrent.ConcurrentHashMap<String, FileType>()
-    private val nameMap = java.util.concurrent.ConcurrentHashMap<String, FileType>()
-    private val markdownMap = java.util.concurrent.ConcurrentHashMap<String, FileType>()
-    private val scopeMap = java.util.concurrent.ConcurrentHashMap<String, FileType>()
+    private val extensionMap = ConcurrentHashMap<String, FileType>()
+    private val nameMap = ConcurrentHashMap<String, FileType>()
+    private val markdownMap = ConcurrentHashMap<String, FileType>()
+    private val scopeMap = ConcurrentHashMap<String, FileType>()
 
     init {
         rebuildLookupMaps()

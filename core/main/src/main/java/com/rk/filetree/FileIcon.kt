@@ -18,6 +18,7 @@ import com.rk.icons.pack.currentIconPack
 import com.rk.icons.rememberSvgImageLoader
 import com.rk.resources.drawables
 import com.rk.utils.loadSvg
+import java.util.concurrent.ConcurrentHashMap
 
 private val plain_file = drawables.file
 private val folder = drawables.folder
@@ -141,7 +142,7 @@ fun getDrawableFileIcon(fileName: String, isDirectory: Boolean, isExpanded: Bool
     return iconPackIcon ?: builtinIcon
 }
 
-private val builtInIconCache = java.util.concurrent.ConcurrentHashMap<String, Icon>()
+private val builtInIconCache = ConcurrentHashMap<String, Icon>()
 
 private fun getBuiltInFileIcon(fileName: String): Icon {
     return builtInIconCache.getOrPut(fileName) {
