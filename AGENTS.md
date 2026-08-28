@@ -80,6 +80,10 @@
     * Implemented custom `NestedScrollConnection` on file list `LazyColumn` components that absorbs unconsumed vertical overscroll delta and post-fling velocity, preventing nested scroll fighting between `LazyColumn` and `ModalBottomSheetState`.
     * Connected `rememberLazyListState` and path change auto-reset (`scrollToItem(0)`) for smooth folder transitions.
 
+12. **Full-Page File Manager & Coroutine Deadlock Fix (`InternalFileManagerSheet.kt` & `ContainerFileManagerSheet.kt`):**
+    * Fixed infinite loading spinner bug caused by calling `lazyListState.scrollToItem(0)` before `loadDirectory()`, which suspended indefinitely while the list was not yet in composition.
+    * Converted both Internal Storage and Container File Managers from partial floating `ModalBottomSheet` into clean, edge-to-edge **Full-Page screens** using `Dialog(properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false))` with system bars insets and a dedicated back button.
+
 ---
 
 ### 📋 What's Next (Upcoming Priorities)
