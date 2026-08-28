@@ -2,10 +2,8 @@ package com.rk.tabs.markdown
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -271,45 +269,34 @@ class MarkdownTab(
                     var scale by remember { mutableFloatStateOf(1f) }
                     var offset by remember { mutableStateOf(Offset.Zero) }
 
+                    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+                        val newScale = (scale * zoomChange).coerceIn(0.6f, 4.0f)
+                        scale = newScale
+                        if (newScale > 1.05f) {
+                            offset += panChange
+                        } else {
+                            offset = Offset.Zero
+                        }
+                    }
+
                     Box(
                         modifier =
                             Modifier.fillMaxSize()
-                                .pointerInput(Unit) {
-                                    awaitEachGesture {
-                                        awaitFirstDown(requireUnconsumed = false)
-                                        do {
-                                            val event = awaitPointerEvent()
-                                            val canceled = event.changes.any { it.isConsumed }
-                                            if (!canceled && event.changes.size >= 2) {
-                                                val zoom = event.calculateZoom()
-                                                val pan = event.calculatePan()
-
-                                                val newScale = (scale * zoom).coerceIn(0.6f, 4.0f)
-                                                scale = newScale
-
-                                                if (newScale > 1.05f) {
-                                                    offset += pan
-                                                } else {
-                                                    offset = Offset.Zero
-                                                }
-
-                                                event.changes.forEach { it.consume() }
-                                            }
-                                        } while (event.changes.any { it.pressed })
-                                    }
-                                },
+                                .transformable(state = transformState),
                     ) {
                         Box(
                             modifier =
                                 Modifier.fillMaxSize()
                                     .verticalScroll(scrollState)
-                                    .graphicsLayer(
-                                        scaleX = scale,
-                                        scaleY = scale,
-                                        translationX = offset.x,
-                                        translationY = offset.y,
-                                        transformOrigin = TransformOrigin(0.5f, 0f),
-                                    ),
+                                    .graphicsLayer {
+                                        if (scale != 1f || offset != Offset.Zero) {
+                                            scaleX = scale
+                                            scaleY = scale
+                                            translationX = offset.x
+                                            translationY = offset.y
+                                            transformOrigin = TransformOrigin(0.5f, 0f)
+                                        }
+                                    },
                         ) {
                             SelectionContainer {
                                 MarkdownView(

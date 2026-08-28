@@ -1,9 +1,6 @@
 package com.rk.tabs.markdown
 
 import androidx.compose.foundation.ScrollState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.LayoutCoordinates
 import kotlinx.coroutines.CoroutineScope
@@ -18,7 +15,7 @@ class MarkdownScrollController(
     val scrollState: ScrollState,
     val coroutineScope: CoroutineScope,
 ) {
-    var rootCoordinates: LayoutCoordinates? by mutableStateOf(null)
+    var rootCoordinates: LayoutCoordinates? = null
 
     // Heading index -> LayoutCoordinates
     val headingCoordinates = mutableMapOf<Int, LayoutCoordinates>()
@@ -40,9 +37,13 @@ class MarkdownScrollController(
     fun registerHeading(index: Int, heading: MarkdownBlock.Heading, coordinates: LayoutCoordinates) {
         headingCoordinates[index] = coordinates
 
-        if (heading.id.isNotBlank()) {
-            anchorCoordinates[heading.id.trim().lowercase()] = coordinates
-            anchorCoordinates[slugify(heading.id)] = coordinates
+        val rawId = heading.id.trim().lowercase()
+        if (rawId.isNotBlank()) {
+            anchorCoordinates[rawId] = coordinates
+            val slug = slugify(heading.id)
+            if (slug != rawId) {
+                anchorCoordinates[slug] = coordinates
+            }
         }
 
         val textSlug = slugify(heading.text)
@@ -54,7 +55,6 @@ class MarkdownScrollController(
             val clean = alias.trim().removePrefix("#").lowercase()
             if (clean.isNotBlank()) {
                 anchorCoordinates[clean] = coordinates
-                anchorCoordinates[slugify(clean)] = coordinates
             }
         }
     }
@@ -63,7 +63,6 @@ class MarkdownScrollController(
         val clean = anchor.trim().removePrefix("#").lowercase()
         if (clean.isNotBlank()) {
             anchorCoordinates[clean] = coordinates
-            anchorCoordinates[slugify(clean)] = coordinates
         }
     }
 

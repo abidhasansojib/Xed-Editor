@@ -107,7 +107,41 @@ object InlineMarkdown {
                 "(?:^|\\s)(@[a-zA-Z0-9_\\-]+)", // 22: Mention
         )
 
+    private data class CacheKey(
+        val text: String,
+        val primaryColor: ULong,
+        val codeBgColor: ULong,
+        val codeTextColor: ULong,
+    )
+
+    private val PARSE_CACHE =
+        object : java.util.LinkedHashMap<CacheKey, AnnotatedString>(256, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<CacheKey, AnnotatedString>?): Boolean {
+                return size > 600
+            }
+        }
+
     fun parse(
+        text: String,
+        primaryColor: Color,
+        codeBgColor: Color,
+        codeTextColor: Color,
+    ): AnnotatedString {
+        val key = CacheKey(text, primaryColor.value, codeBgColor.value, codeTextColor.value)
+        synchronized(PARSE_CACHE) {
+            val cached = PARSE_CACHE[key]
+            if (cached != null) return cached
+        }
+
+        val result = parseInternal(text, primaryColor, codeBgColor, codeTextColor)
+
+        synchronized(PARSE_CACHE) {
+            PARSE_CACHE[key] = result
+        }
+        return result
+    }
+
+    private fun parseInternal(
         text: String,
         primaryColor: Color,
         codeBgColor: Color,

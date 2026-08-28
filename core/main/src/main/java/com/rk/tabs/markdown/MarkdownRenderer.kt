@@ -1028,7 +1028,7 @@ private fun RenderBlockquote(
                 currentFile = currentFile,
                 projectRoot = projectRoot,
                 viewModel = viewModel,
-                anchors = anchors,
+                anchors = emptyList(),
                 scrollController = scrollController,
                 onAnchorClick = onAnchorClick,
             )

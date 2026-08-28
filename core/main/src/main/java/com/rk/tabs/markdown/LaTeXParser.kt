@@ -72,14 +72,35 @@ object LaTeXParser {
             "grey" to Color(0xFF757575),
         )
 
+    private data class MathCacheKey(val expr: String, val color: ULong?, val isBlock: Boolean)
+
+    private val MATH_CACHE =
+        object : java.util.LinkedHashMap<MathCacheKey, AnnotatedString>(128, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<MathCacheKey, AnnotatedString>?): Boolean {
+                return size > 400
+            }
+        }
+
     fun parse(
         expression: String,
         primaryColor: Color? = null,
         isBlock: Boolean = false,
     ): AnnotatedString {
-        return buildAnnotatedString {
-            renderTo(this, expression.trim(), primaryColor)
+        val trimmed = expression.trim()
+        val key = MathCacheKey(trimmed, primaryColor?.value, isBlock)
+        synchronized(MATH_CACHE) {
+            val cached = MATH_CACHE[key]
+            if (cached != null) return cached
         }
+
+        val result = buildAnnotatedString {
+            renderTo(this, trimmed, primaryColor)
+        }
+
+        synchronized(MATH_CACHE) {
+            MATH_CACHE[key] = result
+        }
+        return result
     }
 
     fun renderTo(
