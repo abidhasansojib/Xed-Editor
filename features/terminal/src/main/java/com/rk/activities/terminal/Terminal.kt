@@ -84,9 +84,6 @@ class Terminal : ComponentActivity() {
             initialCommand = command,
         )
         changeSession(DroidspacesTerminalSessionManager.currentSessionId.value)
-        terminalView.get()?.postDelayed({
-            DroidspacesTerminalSessionManager.runCommandInCurrentSession(command, delayMs = 150L)
-        }, 250L)
     }
 
     fun changeSession(sessionId: String) {

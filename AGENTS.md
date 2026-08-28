@@ -63,6 +63,23 @@
    * Built a full-featured in-app file browser and manager for Android's internal storage (`/sdcard`) matching all container file manager capabilities.
    * Quick jump chips (`/sdcard`, `Download`, `Documents`, `DCIM`, `Pictures`, `Music`, `Movies`, `Android`), full breadcrumbs navigation, elevated "Open in Workspace" drawer tab mounting, "+ File" and "+ Folder" creation, clipboard copy/cut/paste, sorting & hidden files toggles, batch multi-selection deletion, real-time search, item context actions (Terminal, Copy, Cut, Duplicate, Rename, Properties, Delete), and direct file opening into editor tabs.
 
+9. **Markdown Previewer Anchor & Outline Navigation (`MarkdownScrollController.kt`, `MarkdownRenderer.kt`, `MarkdownTab.kt` & `MarkdownBlockParser.kt`):**
+   * Built high-performance `MarkdownScrollController` tracking dynamic runtime layout coordinates of headings, paragraph HTML anchors (`<a id="...">`, `<span id="...">`), custom header attributes (`{#custom-id}`), and footnotes.
+   * Supported instant in-page topic redirection for markdown anchor links (e.g. `[What is Droidspaces?](#what-is-droidspaces)`, `[Non-GKI](#non-GKI)`, `[Security Philosophy](#security-model)`, `[Contributing](#contribution)`) with exact, prefix, suffix, and multi-word fuzzy matching.
+   * Enabled cross-file and intra-file anchor navigation (e.g. `file.md#section` or `[[#section]]`) with `initialAnchor` deferred scroll handling.
+   * Fixed Document Outline dialog (`OutlineDialog`) item clicking to smoothly scroll directly to the selected heading in the document.
+   * Added footnote reference click support (`[^1]`) jumping directly to definition blocks.
+
+10. **Internal Storage Terminal Navigation Fix (`InternalFileManagerSheet.kt`, `Terminal.kt` & `DroidspacesTerminalSessionManager.kt`):**
+    * Updated "Open in Terminal" in Internal Storage file manager (header button and folder context menu) to open within Droidspaces Linux container terminal instead of Android root host shell.
+    * Added fallback path normalization (`/storage/emulated/0/...` $\leftrightarrow$ `/sdcard/...`) to ensure accurate directory navigation inside containers.
+    * Enhanced `DroidspacesTerminalSessionManager.getOrCreateSession` to distinguish session types, preventing container commands from being dispatched to Android root sessions and vice-versa.
+
+11. **File Manager Scroll Jitter & Bottom Sheet Shaking Fix (`InternalFileManagerSheet.kt` & `ContainerFileManagerSheet.kt`):**
+    * Fixed violent shaking and oscillation when scrolling or swiping up in file managers inside `ModalBottomSheet`.
+    * Implemented custom `NestedScrollConnection` on file list `LazyColumn` components that absorbs unconsumed vertical overscroll delta and post-fling velocity, preventing nested scroll fighting between `LazyColumn` and `ModalBottomSheetState`.
+    * Connected `rememberLazyListState` and path change auto-reset (`scrollToItem(0)`) for smooth folder transitions.
+
 ---
 
 ### 📋 What's Next (Upcoming Priorities)

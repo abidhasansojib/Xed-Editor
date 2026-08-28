@@ -93,6 +93,8 @@ fun MarkdownView(
     projectRoot: FileObject?,
     viewModel: MainViewModel,
     baseDirPath: String?,
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -110,18 +112,44 @@ fun MarkdownView(
     val footnotes = remember(blocks) { blocks.filterIsInstance<MarkdownBlock.Footnote>() }
 
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .then(
+                    if (scrollController != null) {
+                        Modifier.onGloballyPositioned { coords ->
+                            scrollController.registerRoot(coords)
+                        }
+                    } else Modifier,
+                )
+                .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        var headingIdx = 0
         regularBlocks.forEach { block ->
-            RenderBlock(
-                block = block,
-                currentFile = currentFile,
-                projectRoot = projectRoot,
-                viewModel = viewModel,
-                baseDirPath = baseDirPath,
-                imageLoader = imageLoader,
-            )
+            if (block is MarkdownBlock.Heading) {
+                val currentHeadingIndex = headingIdx++
+                RenderHeading(
+                    heading = block,
+                    headingIndex = currentHeadingIndex,
+                    currentFile = currentFile,
+                    projectRoot = projectRoot,
+                    viewModel = viewModel,
+                    scrollController = scrollController,
+                    onAnchorClick = onAnchorClick,
+                )
+            } else {
+                RenderBlock(
+                    block = block,
+                    currentFile = currentFile,
+                    projectRoot = projectRoot,
+                    viewModel = viewModel,
+                    baseDirPath = baseDirPath,
+                    imageLoader = imageLoader,
+                    scrollController = scrollController,
+                    onAnchorClick = onAnchorClick,
+                )
+            }
         }
 
         if (footnotes.isNotEmpty()) {
@@ -135,12 +163,32 @@ fun MarkdownView(
                 color = MaterialTheme.colorScheme.primary,
             )
             footnotes.forEach { fn ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Row(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .then(
+                                if (scrollController != null) {
+                                    Modifier.onGloballyPositioned { coords ->
+                                        scrollController.registerAnchor("fn-${fn.id}", coords)
+                                        scrollController.registerAnchor("footnote-${fn.id}", coords)
+                                        scrollController.registerAnchor(fn.id, coords)
+                                    }
+                                } else Modifier,
+                            )
+                            .padding(vertical = 4.dp),
+                ) {
                     Text(
                         text = "[${fn.id}]: ",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
                     )
-                    RenderParagraph(fn.text, currentFile, projectRoot, viewModel)
+                    RenderParagraph(
+                        text = fn.text,
+                        currentFile = currentFile,
+                        projectRoot = projectRoot,
+                        viewModel = viewModel,
+                        scrollController = scrollController,
+                        onAnchorClick = onAnchorClick,
+                    )
                 }
             }
         }
@@ -155,19 +203,21 @@ private fun RenderBlock(
     viewModel: MainViewModel,
     baseDirPath: String?,
     imageLoader: ImageLoader,
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     when (block) {
         is MarkdownBlock.Frontmatter -> RenderFrontmatter(block)
-        is MarkdownBlock.Heading -> RenderHeading(block, currentFile, projectRoot, viewModel)
-        is MarkdownBlock.Paragraph -> RenderParagraph(block.text, currentFile, projectRoot, viewModel)
+        is MarkdownBlock.Heading -> RenderHeading(block, 0, currentFile, projectRoot, viewModel, scrollController, onAnchorClick)
+        is MarkdownBlock.Paragraph -> RenderParagraph(block.text, currentFile, projectRoot, viewModel, block.anchors, scrollController, onAnchorClick)
         is MarkdownBlock.CodeBlock -> RenderCodeBlock(block)
-        is MarkdownBlock.Alert -> RenderAlert(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
-        is MarkdownBlock.Details -> RenderDetails(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
-        is MarkdownBlock.Table -> RenderTable(block, currentFile, projectRoot, viewModel)
-        is MarkdownBlock.Blockquote -> RenderBlockquote(block.text, currentFile, projectRoot, viewModel)
-        is MarkdownBlock.ListItem -> RenderListItem(block, currentFile, projectRoot, viewModel)
-        is MarkdownBlock.TaskItem -> RenderTaskItem(block, currentFile, projectRoot, viewModel)
-        is MarkdownBlock.DefinitionList -> RenderDefinitionList(block, currentFile, projectRoot, viewModel)
+        is MarkdownBlock.Alert -> RenderAlert(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader, scrollController, onAnchorClick)
+        is MarkdownBlock.Details -> RenderDetails(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader, scrollController, onAnchorClick)
+        is MarkdownBlock.Table -> RenderTable(block, currentFile, projectRoot, viewModel, onAnchorClick)
+        is MarkdownBlock.Blockquote -> RenderBlockquote(block.text, currentFile, projectRoot, viewModel, block.anchors, scrollController, onAnchorClick)
+        is MarkdownBlock.ListItem -> RenderListItem(block, currentFile, projectRoot, viewModel, scrollController, onAnchorClick)
+        is MarkdownBlock.TaskItem -> RenderTaskItem(block, currentFile, projectRoot, viewModel, scrollController, onAnchorClick)
+        is MarkdownBlock.DefinitionList -> RenderDefinitionList(block, currentFile, projectRoot, viewModel, scrollController, onAnchorClick)
         is MarkdownBlock.Image -> RenderImage(block, currentFile, projectRoot, viewModel, baseDirPath, imageLoader)
         is MarkdownBlock.MathBlock -> RenderMathBlock(block)
         is MarkdownBlock.Footnote -> {}
@@ -183,9 +233,12 @@ private fun RenderBlock(
 @Composable
 private fun RenderHeading(
     heading: MarkdownBlock.Heading,
+    headingIndex: Int,
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     val style =
         when (heading.level) {
@@ -217,7 +270,18 @@ private fun RenderHeading(
             )
         }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = if (heading.level <= 2) 6.dp else 2.dp)) {
+    Column(
+        modifier =
+            Modifier.fillMaxWidth()
+                .then(
+                    if (scrollController != null) {
+                        Modifier.onGloballyPositioned { coords ->
+                            scrollController.registerHeading(headingIndex, heading, coords)
+                        }
+                    } else Modifier,
+                )
+                .padding(top = if (heading.level <= 2) 6.dp else 2.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (heading.level == 1 || heading.level == 2) {
                 Box(
@@ -237,11 +301,15 @@ private fun RenderHeading(
                 style = style.copy(color = primaryColor),
                 onClick = { offset ->
                     annotated.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let { annotation ->
-                        handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
+                        handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context, onAnchorClick)
                         return@ClickableText
                     }
                     annotated.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let { annotation ->
-                        handleWikilinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
+                        handleWikilinkClick(annotation.item, currentFile, projectRoot, viewModel, context, onAnchorClick)
+                        return@ClickableText
+                    }
+                    annotated.getStringAnnotations(tag = "FOOTNOTE", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                        onAnchorClick?.invoke("fn-${annotation.item}")
                         return@ClickableText
                     }
                 },
@@ -265,6 +333,9 @@ private fun RenderParagraph(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    anchors: List<String> = emptyList(),
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
     isStrikethrough: Boolean = false,
     isSubdued: Boolean = false,
 ) {
@@ -291,25 +362,41 @@ private fun RenderParagraph(
         if (isStrikethrough) androidx.compose.ui.text.style.TextDecoration.LineThrough
         else androidx.compose.ui.text.style.TextDecoration.None
 
-    ClickableText(
-        text = annotated,
-        style =
-            MaterialTheme.typography.bodyLarge.copy(
-                color = textColor,
-                lineHeight = 23.sp,
-                textDecoration = textDecoration,
-            ),
-        onClick = { offset ->
-            annotated.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let { annotation ->
-                handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
-                return@ClickableText
-            }
-            annotated.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let { annotation ->
-                handleWikilinkClick(annotation.item, currentFile, projectRoot, viewModel, context)
-                return@ClickableText
-            }
-        },
-    )
+    Box(
+        modifier =
+            Modifier.fillMaxWidth()
+                .then(
+                    if (scrollController != null && anchors.isNotEmpty()) {
+                        Modifier.onGloballyPositioned { coords ->
+                            anchors.forEach { a -> scrollController.registerAnchor(a, coords) }
+                        }
+                    } else Modifier,
+                ),
+    ) {
+        ClickableText(
+            text = annotated,
+            style =
+                MaterialTheme.typography.bodyLarge.copy(
+                    color = textColor,
+                    lineHeight = 23.sp,
+                    textDecoration = textDecoration,
+                ),
+            onClick = { offset ->
+                annotated.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                    handleLinkClick(annotation.item, currentFile, projectRoot, viewModel, context, onAnchorClick)
+                    return@ClickableText
+                }
+                annotated.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                    handleWikilinkClick(annotation.item, currentFile, projectRoot, viewModel, context, onAnchorClick)
+                    return@ClickableText
+                }
+                annotated.getStringAnnotations(tag = "FOOTNOTE", start = offset, end = offset).firstOrNull()?.let { annotation ->
+                    onAnchorClick?.invoke("fn-${annotation.item}")
+                    return@ClickableText
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -543,6 +630,8 @@ private fun RenderDetails(
     viewModel: MainViewModel,
     baseDirPath: String?,
     imageLoader: ImageLoader,
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     var isExpanded by remember { mutableStateOf(details.isOpen) }
 
@@ -586,6 +675,8 @@ private fun RenderDetails(
                             viewModel = viewModel,
                             baseDirPath = baseDirPath,
                             imageLoader = imageLoader,
+                            scrollController = scrollController,
+                            onAnchorClick = onAnchorClick,
                         )
                     }
                 }
@@ -600,6 +691,8 @@ private fun RenderDefinitionList(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         defList.items.forEach { item ->
@@ -611,7 +704,14 @@ private fun RenderDefinitionList(
                 )
                 item.definitions.forEach { def ->
                     Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 2.dp)) {
-                        RenderParagraph(def, currentFile, projectRoot, viewModel)
+                        RenderParagraph(
+                            text = def,
+                            currentFile = currentFile,
+                            projectRoot = projectRoot,
+                            viewModel = viewModel,
+                            scrollController = scrollController,
+                            onAnchorClick = onAnchorClick,
+                        )
                     }
                 }
             }
@@ -669,6 +769,8 @@ private fun RenderAlert(
     viewModel: MainViewModel,
     baseDirPath: String?,
     imageLoader: ImageLoader,
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     var isExpanded by remember { mutableStateOf(!alert.defaultFolded) }
 
@@ -754,6 +856,8 @@ private fun RenderAlert(
                             viewModel = viewModel,
                             baseDirPath = baseDirPath,
                             imageLoader = imageLoader,
+                            scrollController = scrollController,
+                            onAnchorClick = onAnchorClick,
                         )
                     }
                 }
@@ -768,6 +872,7 @@ private fun RenderTable(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val codeBgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -812,10 +917,13 @@ private fun RenderTable(
                                     ),
                                 onClick = { offset ->
                                     annotatedHeader.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let {
-                                        handleLinkClick(it.item, currentFile, projectRoot, viewModel, context)
+                                        handleLinkClick(it.item, currentFile, projectRoot, viewModel, context, onAnchorClick)
                                     }
                                     annotatedHeader.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let {
-                                        handleWikilinkClick(it.item, currentFile, projectRoot, viewModel, context)
+                                        handleWikilinkClick(it.item, currentFile, projectRoot, viewModel, context, onAnchorClick)
+                                    }
+                                    annotatedHeader.getStringAnnotations(tag = "FOOTNOTE", start = offset, end = offset).firstOrNull()?.let {
+                                        onAnchorClick?.invoke("fn-${it.item}")
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -857,10 +965,13 @@ private fun RenderTable(
                                         ),
                                     onClick = { offset ->
                                         annotatedCell.getStringAnnotations(tag = "URL", start = offset, end = offset).firstOrNull()?.let {
-                                            handleLinkClick(it.item, currentFile, projectRoot, viewModel, context)
+                                            handleLinkClick(it.item, currentFile, projectRoot, viewModel, context, onAnchorClick)
                                         }
                                         annotatedCell.getStringAnnotations(tag = "WIKILINK", start = offset, end = offset).firstOrNull()?.let {
-                                            handleWikilinkClick(it.item, currentFile, projectRoot, viewModel, context)
+                                            handleWikilinkClick(it.item, currentFile, projectRoot, viewModel, context, onAnchorClick)
+                                        }
+                                        annotatedCell.getStringAnnotations(tag = "FOOTNOTE", start = offset, end = offset).firstOrNull()?.let {
+                                            onAnchorClick?.invoke("fn-${it.item}")
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
@@ -884,9 +995,21 @@ private fun RenderBlockquote(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    anchors: List<String> = emptyList(),
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)),
+        modifier =
+            Modifier.fillMaxWidth()
+                .then(
+                    if (scrollController != null && anchors.isNotEmpty()) {
+                        Modifier.onGloballyPositioned { coords ->
+                            anchors.forEach { a -> scrollController.registerAnchor(a, coords) }
+                        }
+                    } else Modifier,
+                )
+                .clip(RoundedCornerShape(6.dp)),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         shape = RoundedCornerShape(6.dp),
     ) {
@@ -899,7 +1022,15 @@ private fun RenderBlockquote(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            RenderParagraph(text, currentFile, projectRoot, viewModel)
+            RenderParagraph(
+                text = text,
+                currentFile = currentFile,
+                projectRoot = projectRoot,
+                viewModel = viewModel,
+                anchors = anchors,
+                scrollController = scrollController,
+                onAnchorClick = onAnchorClick,
+            )
         }
     }
 }
@@ -910,6 +1041,8 @@ private fun RenderListItem(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     val indent = (item.depth * 14).dp
     val bullet =
@@ -930,7 +1063,14 @@ private fun RenderListItem(
                 ),
             modifier = Modifier.width(if (item.ordered) 26.dp else 16.dp),
         )
-        RenderParagraph(item.text, currentFile, projectRoot, viewModel)
+        RenderParagraph(
+            text = item.text,
+            currentFile = currentFile,
+            projectRoot = projectRoot,
+            viewModel = viewModel,
+            scrollController = scrollController,
+            onAnchorClick = onAnchorClick,
+        )
     }
 }
 
@@ -940,6 +1080,8 @@ private fun RenderTaskItem(
     currentFile: FileObject,
     projectRoot: FileObject?,
     viewModel: MainViewModel,
+    scrollController: MarkdownScrollController? = null,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     var isChecked by remember(task.isChecked) { mutableStateOf(task.isChecked) }
     val indent = (task.depth * 14).dp
@@ -961,6 +1103,8 @@ private fun RenderTaskItem(
             currentFile = currentFile,
             projectRoot = projectRoot,
             viewModel = viewModel,
+            scrollController = scrollController,
+            onAnchorClick = onAnchorClick,
             isStrikethrough = isChecked,
             isSubdued = isChecked,
         )
@@ -1223,6 +1367,7 @@ private fun handleLinkClick(
     projectRoot: FileObject?,
     viewModel: MainViewModel,
     context: Context,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
     val url = rawUrl.trim()
 
@@ -1251,13 +1396,29 @@ private fun handleLinkClick(
         }
 
         url.startsWith("#") -> {
-            // Heading anchor
+            val anchor = url.removePrefix("#").trim()
+            if (anchor.isNotEmpty()) {
+                onAnchorClick?.invoke(anchor)
+            }
         }
 
         else -> {
+            val cleanUrl = url.substringBefore('#').substringBefore('?')
+            val anchor = if (url.contains('#')) url.substringAfter('#').trim() else null
+
+            val currentFileName = currentFile.getName()
+            val currentAbsPath = currentFile.getAbsolutePath()
+            val isCurrentFile = cleanUrl.isEmpty() ||
+                cleanUrl.equals(currentFileName, ignoreCase = true) ||
+                cleanUrl.equals("./$currentFileName", ignoreCase = true)
+
+            if (isCurrentFile && !anchor.isNullOrBlank()) {
+                onAnchorClick?.invoke(anchor)
+                return
+            }
+
             DefaultScope.launch(Dispatchers.IO) {
                 try {
-                    val cleanUrl = url.substringBefore('#').substringBefore('?')
                     val decodedPath = URLDecoder.decode(cleanUrl, "UTF-8")
 
                     if (currentFile is DroidspacesFileObject) {
@@ -1265,6 +1426,13 @@ private fun handleLinkClick(
                         val currentParentPath = currentFile.containerPath.trimEnd('/').substringBeforeLast('/', "").ifEmpty { "/" }
                         val fullPath = normalizeContainerPath(currentParentPath, decodedPath)
                         if (DroidspacesShell.testPathExists(containerName, fullPath)) {
+                            if (fullPath == currentFile.containerPath && !anchor.isNullOrBlank()) {
+                                withContext(Dispatchers.Main) {
+                                    onAnchorClick?.invoke(anchor)
+                                }
+                                return@launch
+                            }
+
                             val targetObj = DroidspacesFileObject(containerName, fullPath)
                             withContext(Dispatchers.Main) {
                                 val isMd = fullPath.endsWith(".md", ignoreCase = true) ||
@@ -1275,6 +1443,7 @@ private fun handleLinkClick(
                                             file = targetObj,
                                             projectRoot = projectRoot,
                                             viewModel = viewModel,
+                                            initialAnchor = anchor,
                                         )
                                     } else {
                                         TabRegistry.getTab(
@@ -1335,6 +1504,15 @@ private fun handleLinkClick(
                     }
 
                     if (targetFile != null && targetFile.exists()) {
+                        val targetCanonical = runCatching { targetFile.canonicalPath }.getOrDefault(targetFile.absolutePath)
+                        val currentCanonical = runCatching { File(currentAbsPath).canonicalPath }.getOrDefault(currentAbsPath)
+                        if (targetCanonical == currentCanonical && !anchor.isNullOrBlank()) {
+                            withContext(Dispatchers.Main) {
+                                onAnchorClick?.invoke(anchor)
+                            }
+                            return@launch
+                        }
+
                         withContext(Dispatchers.Main) {
                             val isMd = targetFile.name.endsWith(".md", ignoreCase = true) ||
                                 targetFile.name.endsWith(".markdown", ignoreCase = true)
@@ -1344,6 +1522,7 @@ private fun handleLinkClick(
                                         file = FileWrapper(targetFile),
                                         projectRoot = projectRoot,
                                         viewModel = viewModel,
+                                        initialAnchor = anchor,
                                     )
                                 } else {
                                     TabRegistry.getTab(
@@ -1377,8 +1556,22 @@ private fun handleWikilinkClick(
     projectRoot: FileObject?,
     viewModel: MainViewModel,
     context: Context,
+    onAnchorClick: ((String) -> Unit)? = null,
 ) {
-    val cleanName = targetName.trim().substringBefore('#')
+    val raw = targetName.trim()
+    val cleanName = raw.substringBefore('#').trim()
+    val anchor = if (raw.contains('#')) raw.substringAfter('#').trim() else null
+
+    if (cleanName.isEmpty() && !anchor.isNullOrBlank()) {
+        onAnchorClick?.invoke(anchor)
+        return
+    }
+
+    if (cleanName.equals(currentFile.getName().substringBeforeLast('.'), ignoreCase = true) && !anchor.isNullOrBlank()) {
+        onAnchorClick?.invoke(anchor)
+        return
+    }
+
     DefaultScope.launch(Dispatchers.IO) {
         try {
             if (currentFile is DroidspacesFileObject) {
@@ -1391,6 +1584,13 @@ private fun handleWikilinkClick(
                 )
                 for (p in candidatePaths) {
                     if (DroidspacesShell.testPathExists(containerName, p)) {
+                        if (p == currentFile.containerPath && !anchor.isNullOrBlank()) {
+                            withContext(Dispatchers.Main) {
+                                onAnchorClick?.invoke(anchor)
+                            }
+                            return@launch
+                        }
+
                         val targetObj = DroidspacesFileObject(containerName, p)
                         withContext(Dispatchers.Main) {
                             val isMd = p.endsWith(".md", ignoreCase = true) || p.endsWith(".markdown", ignoreCase = true)
@@ -1399,6 +1599,7 @@ private fun handleWikilinkClick(
                                     file = targetObj,
                                     projectRoot = projectRoot,
                                     viewModel = viewModel,
+                                    initialAnchor = anchor,
                                 )
                             } else {
                                 TabRegistry.getTab(
@@ -1435,6 +1636,15 @@ private fun handleWikilinkClick(
             }
 
             if (foundFile != null && foundFile.exists()) {
+                val targetCanonical = runCatching { foundFile.canonicalPath }.getOrDefault(foundFile.absolutePath)
+                val currentCanonical = runCatching { File(currentFile.getAbsolutePath()).canonicalPath }.getOrDefault(currentFile.getAbsolutePath())
+                if (targetCanonical == currentCanonical && !anchor.isNullOrBlank()) {
+                    withContext(Dispatchers.Main) {
+                        onAnchorClick?.invoke(anchor)
+                    }
+                    return@launch
+                }
+
                 withContext(Dispatchers.Main) {
                     val isMd = foundFile.name.endsWith(".md", ignoreCase = true) ||
                         foundFile.name.endsWith(".markdown", ignoreCase = true)
@@ -1444,6 +1654,7 @@ private fun handleWikilinkClick(
                                 file = FileWrapper(foundFile),
                                 projectRoot = projectRoot,
                                 viewModel = viewModel,
+                                initialAnchor = anchor,
                             )
                         } else {
                             TabRegistry.getTab(

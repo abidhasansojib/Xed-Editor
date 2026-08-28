@@ -21,7 +21,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -133,6 +139,28 @@ fun ContainerFileManagerSheet(
     val context = LocalContext.current
     val mainActivity = MainActivity.instance
 
+    val lazyListState = rememberLazyListState()
+    val listNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                // Absorb remaining vertical scroll at boundaries so the parent ModalBottomSheet doesn't shake/bounce
+                return Offset(0f, available.y)
+            }
+
+            override suspend fun onPostFling(
+                consumed: Velocity,
+                available: Velocity,
+            ): Velocity {
+                // Absorb remaining vertical fling velocity so bottom sheet never shakes during fast swipe
+                return Velocity(0f, available.y)
+            }
+        }
+    }
+
     fun copyToClipboard(text: String, label: String = "Path") {
         val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         val clip = ClipData.newPlainText(label, text)
@@ -174,6 +202,7 @@ fun ContainerFileManagerSheet(
     }
 
     LaunchedEffect(currentPath) {
+        lazyListState.scrollToItem(0)
         loadDirectory(currentPath)
     }
 
@@ -944,9 +973,11 @@ fun ContainerFileManagerSheet(
                 }
             } else {
                 LazyColumn(
+                    state = lazyListState,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .weight(1f)
+                        .nestedScroll(listNestedScrollConnection),
                 ) {
                     items(
                         items = processedItems,

@@ -73,10 +73,15 @@ data class DefinitionItem(val term: String, val definitions: List<String>)
  */
 sealed interface MarkdownBlock {
     data class Frontmatter(val data: Map<String, String>, val raw: String) : MarkdownBlock
-    data class Heading(val level: Int, val text: String, val id: String = "") : MarkdownBlock
-    data class Paragraph(val text: String) : MarkdownBlock
+    data class Heading(
+        val level: Int,
+        val text: String,
+        val id: String = "",
+        val anchorAliases: List<String> = emptyList(),
+    ) : MarkdownBlock
+    data class Paragraph(val text: String, val anchors: List<String> = emptyList()) : MarkdownBlock
     data class CodeBlock(val language: String, val code: String) : MarkdownBlock
-    data class Blockquote(val text: String) : MarkdownBlock
+    data class Blockquote(val text: String, val anchors: List<String> = emptyList()) : MarkdownBlock
     data class Alert(
         val type: AlertType,
         val title: String,

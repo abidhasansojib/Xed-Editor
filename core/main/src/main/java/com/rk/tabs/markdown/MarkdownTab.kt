@@ -91,6 +91,7 @@ class MarkdownTab(
     override val file: FileObject,
     var projectRoot: FileObject? = null,
     val viewModel: MainViewModel,
+    val initialAnchor: String? = null,
 ) : Tab() {
     override val name: String = "Markdown preview"
     override val icon: ImageVector
@@ -185,6 +186,23 @@ class MarkdownTab(
         var isLoading by remember { mutableStateOf(true) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
 
+        val scrollState = rememberScrollState()
+        val coroutineScope = rememberCoroutineScope()
+        val scrollController = remember(scrollState, coroutineScope) {
+            MarkdownScrollController(scrollState, coroutineScope)
+        }
+
+        LaunchedEffect(currentHeadings) {
+            scrollController.updateHeadings(currentHeadings)
+        }
+
+        LaunchedEffect(parsedBlocks, initialAnchor) {
+            if (parsedBlocks != null && !initialAnchor.isNullOrBlank()) {
+                kotlinx.coroutines.delay(150)
+                scrollController.scrollToAnchor(initialAnchor)
+            }
+        }
+
         LaunchedEffect(file, refreshKey) {
             isLoading = true
             errorMessage = null
@@ -222,6 +240,9 @@ class MarkdownTab(
                 wordCount = docWordCount,
                 charCount = docCharCount,
                 onDismiss = { showOutlineDialog = false },
+                onHeadingClick = { heading, index ->
+                    scrollController.scrollToHeading(heading, index)
+                },
             )
         }
 
@@ -249,7 +270,6 @@ class MarkdownTab(
                 parsedBlocks != null -> {
                     var scale by remember { mutableFloatStateOf(1f) }
                     var offset by remember { mutableStateOf(Offset.Zero) }
-                    val scrollState = rememberScrollState()
 
                     Box(
                         modifier =
@@ -298,6 +318,10 @@ class MarkdownTab(
                                     projectRoot = projectRoot,
                                     viewModel = viewModel,
                                     baseDirPath = baseDirPath,
+                                    scrollController = scrollController,
+                                    onAnchorClick = { anchor ->
+                                        scrollController.scrollToAnchor(anchor)
+                                    },
                                 )
                             }
                         }
@@ -348,6 +372,7 @@ class MarkdownTab(
         wordCount: Int,
         charCount: Int,
         onDismiss: () -> Unit,
+        onHeadingClick: (MarkdownBlock.Heading, Int) -> Unit = { _, _ -> },
     ) {
         val readTimeMin = maxOf(1, (wordCount / 200))
 
@@ -412,13 +437,17 @@ class MarkdownTab(
                             modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            items(headings) { heading ->
+                            items(headings.size) { index ->
+                                val heading = headings[index]
                                 val indent = ((heading.level - 1) * 12).dp
                                 Row(
                                     modifier =
                                         Modifier.fillMaxWidth()
                                             .clip(RoundedCornerShape(6.dp))
-                                            .clickable { onDismiss() }
+                                            .clickable {
+                                                onDismiss()
+                                                onHeadingClick(heading, index)
+                                            }
                                             .padding(start = indent, top = 6.dp, bottom = 6.dp, end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {

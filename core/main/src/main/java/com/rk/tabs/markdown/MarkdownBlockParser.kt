@@ -57,6 +57,7 @@ object MarkdownBlockParser {
     fun parse(markdown: String): List<MarkdownBlock> {
         var rawText = markdown
         val blocks = mutableListOf<MarkdownBlock>()
+        val seenSlugs = mutableMapOf<String, Int>()
 
         // Strip Obsidian comments %% ... %%
         rawText = rawText.replace(Regex("%%[\\s\\S]*?%%"), "")
@@ -74,7 +75,7 @@ object MarkdownBlockParser {
         var child: Node? = document.firstChild
 
         while (child != null) {
-            parseNodeInto(child, blocks)
+            parseNodeInto(child, blocks, seenSlugs)
             child = child.next
         }
 
@@ -97,12 +98,47 @@ object MarkdownBlockParser {
         return map
     }
 
-    private fun parseNodeInto(node: Node, blocks: MutableList<MarkdownBlock>) {
+    private fun parseNodeInto(
+        node: Node,
+        blocks: MutableList<MarkdownBlock>,
+        seenSlugs: MutableMap<String, Int> = mutableMapOf(),
+    ) {
         when (node) {
             is Heading -> {
-                val text = renderInlineText(node).trim()
-                val id = slugify(text)
-                blocks.add(MarkdownBlock.Heading(level = node.level, text = text, id = id))
+                val rawText = renderInlineText(node).trim()
+                val explicitIdMatch = Regex("\\{#[^}]+\\}").find(rawText)
+                val explicitId = explicitIdMatch?.value?.removePrefix("{#")?.removeSuffix("}")?.trim()
+
+                val htmlAnchorMatch =
+                    Regex("<a\\s+(?:id|name)=[\"']([^\"']+)[\"'][^>]*>", RegexOption.IGNORE_CASE).find(rawText)
+                val htmlAnchor = htmlAnchorMatch?.groupValues?.get(1)?.trim()
+
+                val cleanText =
+                    rawText
+                        .replace(Regex("\\{#[^}]+\\}"), "")
+                        .replace(Regex("<a\\s+[^>]*>.*?</a>|<a\\s+[^>]*/>|<a\\s+[^>]*>", RegexOption.IGNORE_CASE), "")
+                        .trim()
+
+                val baseSlug = MarkdownScrollController.slugify(cleanText)
+                val count = seenSlugs.getOrDefault(baseSlug, 0)
+                seenSlugs[baseSlug] = count + 1
+                val autoSlug = if (count == 0) baseSlug else "$baseSlug-$count"
+
+                val primaryId = explicitId ?: htmlAnchor ?: autoSlug
+                val aliases = mutableListOf<String>()
+                if (autoSlug.isNotBlank()) aliases.add(autoSlug)
+                if (baseSlug.isNotBlank() && baseSlug != autoSlug) aliases.add(baseSlug)
+                if (!explicitId.isNullOrBlank()) aliases.add(explicitId)
+                if (!htmlAnchor.isNullOrBlank()) aliases.add(htmlAnchor)
+
+                blocks.add(
+                    MarkdownBlock.Heading(
+                        level = node.level,
+                        text = cleanText,
+                        id = primaryId,
+                        anchorAliases = aliases.distinct(),
+                    ),
+                )
             }
 
             is FencedCodeBlock -> {
@@ -186,7 +222,10 @@ object MarkdownBlockParser {
                     val alt = renderInlineText(first)
                     blocks.add(MarkdownBlock.Image(alt = alt, url = first.destination ?: ""))
                 } else {
-                    blocks.add(MarkdownBlock.Paragraph(text = raw))
+                    val anchorMatches =
+                        Regex("<(?:a|span)\\s+(?:id|name)=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).findAll(raw)
+                    val anchors = anchorMatches.map { it.groupValues[1].trim() }.filter { it.isNotEmpty() }.toList()
+                    blocks.add(MarkdownBlock.Paragraph(text = raw, anchors = anchors))
                 }
             }
 
@@ -228,9 +267,13 @@ object MarkdownBlockParser {
                         val url = mdImgMatch.groupValues[2]
                         blocks.add(MarkdownBlock.Image(alt = alt, url = url))
                     } else {
+                        val anchorMatches =
+                            Regex("<(?:a|span)\\s+(?:id|name)=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).findAll(raw)
+                        val anchors = anchorMatches.map { it.groupValues[1].trim() }.filter { it.isNotEmpty() }.toList()
+
                         val stripped = raw.replace(Regex("<div[^>]*>|</div>|<center>|</center>|<p[^>]*>|</p>", RegexOption.IGNORE_CASE), "").trim()
                         if (stripped.isNotEmpty()) {
-                            blocks.add(MarkdownBlock.Paragraph(text = stripped))
+                            blocks.add(MarkdownBlock.Paragraph(text = stripped, anchors = anchors))
                         }
                     }
                 }
@@ -328,10 +371,7 @@ object MarkdownBlockParser {
     }
 
     private fun slugify(text: String): String {
-        return text.lowercase()
-            .replace(Regex("[^a-z0-9\\s-]"), "")
-            .replace(Regex("\\s+"), "-")
-            .trim('-')
+        return MarkdownScrollController.slugify(text)
     }
 
     private fun parseBlockQuote(node: BlockQuote): MarkdownBlock {
@@ -361,7 +401,11 @@ object MarkdownBlockParser {
             )
         }
 
-        return MarkdownBlock.Blockquote(text = rawText)
+        val anchorMatches =
+            Regex("<(?:a|span)\\s+(?:id|name)=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).findAll(rawText)
+        val anchors = anchorMatches.map { it.groupValues[1].trim() }.filter { it.isNotEmpty() }.toList()
+
+        return MarkdownBlock.Blockquote(text = rawText, anchors = anchors)
     }
 
     private fun parseTable(tableBlock: TableBlock): MarkdownBlock {

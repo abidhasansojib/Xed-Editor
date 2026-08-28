@@ -89,25 +89,6 @@ object DroidspacesTerminalSessionManager {
     ): TerminalSession {
         val isAndroidRoot = user == DroidspacesConstants.ANDROID_ROOT_USER || containerName == DroidspacesConstants.ANDROID_CONTAINER_NAME
 
-        val id = requestedId ?: if (sessions.isNotEmpty()) {
-            if (currentSessionId.value.isNotEmpty() && sessions.containsKey(currentSessionId.value)) {
-                currentSessionId.value
-            } else {
-                sessions.keys.first()
-            }
-        } else {
-            if (isAndroidRoot) "Android Root #1" else "main #1"
-        }
-
-        sessions[id]?.let { existingSession ->
-            existingSession.updateTerminalSessionClient(client)
-            _currentSessionId.value = id
-            if (!initialCommand.isNullOrBlank()) {
-                runCommandInSession(id, initialCommand, delayMs = 150L)
-            }
-            return existingSession
-        }
-
         val effectiveContainer = if (isAndroidRoot) {
             DroidspacesConstants.ANDROID_CONTAINER_NAME
         } else {
@@ -117,6 +98,51 @@ object DroidspacesTerminalSessionManager {
             DroidspacesConstants.ANDROID_ROOT_USER
         } else {
             user ?: Settings.droidspaces_terminal_default_user.ifBlank { "root" }
+        }
+
+        val matchingSessionId = if (requestedId != null) {
+            requestedId
+        } else {
+            val curId = currentSessionId.value
+            if (curId.isNotEmpty() && sessions.containsKey(curId)) {
+                val curIsAndroid = isAndroidRootSession(curId)
+                val curContainer = sessionContainers[curId] ?: ""
+                if (curIsAndroid == isAndroidRoot && (isAndroidRoot || curContainer.equals(effectiveContainer, ignoreCase = true))) {
+                    curId
+                } else {
+                    sessions.keys.firstOrNull { sid ->
+                        val isAnd = isAndroidRootSession(sid)
+                        val cont = sessionContainers[sid] ?: ""
+                        isAnd == isAndroidRoot && (isAndroidRoot || cont.equals(effectiveContainer, ignoreCase = true))
+                    }
+                }
+            } else {
+                sessions.keys.firstOrNull { sid ->
+                    val isAnd = isAndroidRootSession(sid)
+                    val cont = sessionContainers[sid] ?: ""
+                    isAnd == isAndroidRoot && (isAndroidRoot || cont.equals(effectiveContainer, ignoreCase = true))
+                }
+            }
+        }
+
+        val id = matchingSessionId ?: run {
+            val prefix = if (isAndroidRoot) "Android Root" else effectiveUser
+            var index = 1
+            var candidate = "$prefix #$index"
+            while (sessions.containsKey(candidate)) {
+                index++
+                candidate = "$prefix #$index"
+            }
+            candidate
+        }
+
+        sessions[id]?.let { existingSession ->
+            existingSession.updateTerminalSessionClient(client)
+            _currentSessionId.value = id
+            if (!initialCommand.isNullOrBlank()) {
+                runCommandInSession(id, initialCommand, delayMs = 150L)
+            }
+            return existingSession
         }
 
         val session = if (isAndroidRoot) {
