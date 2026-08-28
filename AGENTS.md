@@ -84,6 +84,12 @@
     * Fixed infinite loading spinner bug caused by calling `lazyListState.scrollToItem(0)` before `loadDirectory()`, which suspended indefinitely while the list was not yet in composition.
     * Converted both Internal Storage and Container File Managers from partial floating `ModalBottomSheet` into clean, edge-to-edge **Full-Page screens** using `Dialog(properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false))` with system bars insets and a dedicated back button.
 
+13. **Markdown Previewer Smooth Scrolling & Performance Optimizations (`MarkdownTab.kt`, `InlineMarkdown.kt`, `LaTeXParser.kt` & `MarkdownScrollController.kt`):**
+    * Replaced touch-intercepting raw pointer gesture loops with Compose `transformable`, giving 1-finger vertical scrolling full native priority and smooth fling inertia.
+    * Converted `graphicsLayer` to the draw-only lambda modifier, bypassing recomposition and layout passes of the entire Markdown tree during zoom, pan, and scroll.
+    * Implemented thread-safe LRU caches in `InlineMarkdown` and `LaTeXParser`, eliminating CommonMark AST parsing, regex evaluation, and string allocations on every scroll frame.
+    * Removed `mutableStateOf` from coordinate tracking in `MarkdownScrollController` to eliminate scroll-time recomposition invalidations.
+
 ---
 
 ### 📋 What's Next (Upcoming Priorities)
