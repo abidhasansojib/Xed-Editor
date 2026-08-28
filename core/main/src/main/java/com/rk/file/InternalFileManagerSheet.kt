@@ -494,21 +494,6 @@ fun InternalFileManagerSheet(
                                 modifier = Modifier.size(22.dp),
                             )
                         }
-                        IconButton(
-                            onClick = {
-                                isSelectMode = !isSelectMode
-                                if (!isSelectMode) selectedItems = emptySet()
-                            },
-                        ) {
-                            Icon(
-                                imageVector = if (isSelectMode) Icons.Default.Close else Icons.Default.Check,
-                                contentDescription = "Select Mode",
-                                tint = if (isSelectMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
-                        }
                     }
                 }
 
