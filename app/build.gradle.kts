@@ -16,11 +16,11 @@ android {
 
         targetSdk = 37
 
-        // versioning: base 1.0.0, auto-increments with GITHUB_RUN_NUMBER on CI
-        val baseVersion = "1.0.0"
+        // versioning: base 2.0, auto-increments with GITHUB_RUN_NUMBER on CI
+        val baseVersion = "2.0"
         val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: System.getenv("BUILD_NUMBER"))?.toIntOrNull() ?: 1
         versionCode = buildNumber
-        versionName = System.getenv("VERSION_NAME") ?: (if (System.getenv("GITHUB_ACTIONS") == "true") "$baseVersion.$buildNumber" else baseVersion)
+        versionName = "2.0"
         vectorDrawables { useSupportLibrary = true }
     }
 

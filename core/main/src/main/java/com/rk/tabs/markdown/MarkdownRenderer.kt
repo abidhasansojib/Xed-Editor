@@ -81,6 +81,10 @@ import com.rk.utils.toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.graphics.Typeface
+import android.text.Spanned
+import com.rk.utils.toAnnotatedString
+import io.github.rosemoe.sora.lsp.editor.text.MarkdownCodeHighlighterRegistry
 import java.io.File
 import java.net.URLDecoder
 
@@ -461,6 +465,27 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
             else -> codeBlock.language.ifBlank { "CODE" }.uppercase()
         }
 
+    var syntaxAnnotated by remember(codeBlock.code, codeBlock.language) {
+        mutableStateOf<AnnotatedString?>(null)
+    }
+
+    LaunchedEffect(codeBlock.code, codeBlock.language) {
+        if (isDiff || isMermaid || codeBlock.language.isBlank()) return@LaunchedEffect
+        withContext(Dispatchers.Default) {
+            try {
+                val highlighted = MarkdownCodeHighlighterRegistry.global.highlightAsync(
+                    code = codeBlock.code,
+                    language = codeBlock.language,
+                    codeTypeface = Typeface.MONOSPACE,
+                )
+                val annotated = (highlighted as? Spanned)?.toAnnotatedString()
+                if (annotated != null) {
+                    syntaxAnnotated = annotated
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -531,27 +556,41 @@ private fun RenderCodeBlock(codeBlock: MarkdownBlock.CodeBlock) {
                         .then(if (!wrapCode) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
                         .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                if (diffAnnotated != null) {
-                    Text(
-                        text = diffAnnotated,
-                        style =
-                            MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp,
-                                lineHeight = 19.sp,
-                            ),
-                    )
-                } else {
-                    Text(
-                        text = codeBlock.code,
-                        style =
-                            MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp,
-                                lineHeight = 19.sp,
-                            ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                when {
+                    diffAnnotated != null -> {
+                        Text(
+                            text = diffAnnotated,
+                            style =
+                                MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 13.sp,
+                                    lineHeight = 19.sp,
+                                ),
+                        )
+                    }
+                    syntaxAnnotated != null -> {
+                        Text(
+                            text = syntaxAnnotated!!,
+                            style =
+                                MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 13.sp,
+                                    lineHeight = 19.sp,
+                                ),
+                        )
+                    }
+                    else -> {
+                        Text(
+                            text = codeBlock.code,
+                            style =
+                                MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 13.sp,
+                                    lineHeight = 19.sp,
+                                ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }

@@ -32,7 +32,7 @@ import android.view.autofill.AutofillValue;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
-import android.widget.Scroller;
+import android.widget.OverScroller;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
@@ -78,7 +78,7 @@ public final class TerminalView extends View {
     /** Keep track of the time when a touch event leading to sending mouse scroll events started. */
     private long mMouseStartDownTime = -1;
 
-    final Scroller mScroller;
+    final OverScroller mScroller;
 
     /** What was left in from scrolling movement. */
     float mScrollRemainder;
@@ -291,7 +291,7 @@ public final class TerminalView extends View {
                 }
             }
         });
-        mScroller = new Scroller(context);
+        mScroller = new OverScroller(context);
         AccessibilityManager am = (AccessibilityManager) context.getSystemService(Context.ACCESSIBILITY_SERVICE);
         mAccessibilityEnabled = am.isEnabled();
     }
