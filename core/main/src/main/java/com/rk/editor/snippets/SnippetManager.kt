@@ -103,7 +103,35 @@ object SnippetManager {
             snippetRegistry["source.css"] ?: emptyList()
         } else emptyList()
 
-        val all = (direct + base + htmlAliases + jsAliases + cssAliases).distinctBy { it.trigger }
+        val ktAliases = if (normalized.contains("kotlin") || normalized.contains("kt")) {
+            snippetRegistry["source.kotlin"] ?: emptyList()
+        } else emptyList()
+
+        val javaAliases = if (normalized.contains("java") && !normalized.contains("javascript")) {
+            snippetRegistry["source.java"] ?: emptyList()
+        } else emptyList()
+
+        val cAliases = if (normalized.contains("cpp") || normalized.contains("c++") || normalized.endsWith(".c") || normalized.contains("source.c")) {
+            (snippetRegistry["source.cpp"] ?: emptyList()) + (snippetRegistry["source.c"] ?: emptyList())
+        } else emptyList()
+
+        val pyAliases = if (normalized.contains("python") || normalized.contains("py")) {
+            snippetRegistry["source.python"] ?: emptyList()
+        } else emptyList()
+
+        val rustAliases = if (normalized.contains("rust") || normalized.contains("rs")) {
+            snippetRegistry["source.rust"] ?: emptyList()
+        } else emptyList()
+
+        val goAliases = if (normalized.contains("golang") || normalized.contains("go")) {
+            snippetRegistry["source.go"] ?: emptyList()
+        } else emptyList()
+
+        val shAliases = if (normalized.contains("shell") || normalized.contains("bash") || normalized.contains("sh")) {
+            snippetRegistry["source.shell"] ?: emptyList()
+        } else emptyList()
+
+        val all = (direct + base + htmlAliases + jsAliases + cssAliases + ktAliases + javaAliases + cAliases + pyAliases + rustAliases + goAliases + shAliases).distinctBy { it.trigger }
         return all
     }
 
@@ -115,7 +143,9 @@ object SnippetManager {
         var start = col - 1
         while (start >= 0) {
             val ch = line[start]
-            if (ch.isLetterOrDigit() || ch == '_' || ch == '$' || ch == ':' || ch == '!' || ch == '-' || ch == '#' || ch == '.' || ch == '>' || ch == '+' || ch == '*' || ch == '[' || ch == ']' || ch == '=' || ch == '{' || ch == '}') {
+            // Allow identifier chars and tags/emmet trigger symbols (:, -, ., #, !)
+            // Break on operators like =, +, *, <, >, [, ], {, }, (, ), ;, ,
+            if (ch.isLetterOrDigit() || ch == '_' || ch == '$' || ch == ':' || ch == '-' || ch == '.' || ch == '#' || ch == '!') {
                 start--
             } else {
                 break
@@ -213,9 +243,13 @@ object SnippetManager {
 
         // 1. Snippets (highest ranking & priority)
         val snippets = getSnippetsForScope(scope)
-        val prefixToMatch = rawPrefix.ifEmpty { idPrefix }.lowercase()
+        val prefixToMatch = if (rawPrefix.isNotEmpty() && snippets.any { it.trigger.startsWith(rawPrefix, ignoreCase = true) }) {
+            rawPrefix.lowercase()
+        } else {
+            idPrefix.lowercase()
+        }
 
-        if (snippets.isNotEmpty()) {
+        if (snippets.isNotEmpty() && prefixToMatch.isNotEmpty()) {
             for (snip in snippets) {
                 val triggerLower = snip.trigger.lowercase()
                 val labelLower = snip.label.lowercase()
@@ -232,11 +266,15 @@ object SnippetManager {
                         rawPrefix.length
                     }
 
+                    val isExact = triggerLower == prefixToMatch || labelLower == prefixToMatch
+                    val rank = if (isExact) "00" else if (triggerLower.startsWith(prefixToMatch)) "01" else "02"
+
                     val snippetDesc = SnippetDescription(prefixLen, snip.parsedCodeSnippet, true)
                     val item = SimpleSnippetCompletionItem(snip.label, snip.description, snippetDesc).apply {
+                        this.prefixLength = prefixLen
                         kind(CompletionItemKind.Snippet)
                         this.detail = snip.detail ?: "Snippet"
-                        this.sortText = "00_${snip.trigger}"
+                        this.sortText = "${rank}_${snip.trigger}"
                     }
                     items.add(item)
                     seenLabels.add(snip.label.lowercase())
@@ -244,12 +282,13 @@ object SnippetManager {
             }
         }
 
-        // 1.5 Dynamic Emmet expansion (e.g. div.card -> <div class="card">$0</div> or #hero -> <div id="hero">$0</div>)
+        // 1.5 Dynamic Emmet expansion
         val dynamicEmmet = parseDynamicEmmet(rawPrefix.ifEmpty { idPrefix }, scope)
         if (dynamicEmmet != null && !seenLabels.contains(dynamicEmmet.label.lowercase())) {
             val prefixLen = rawPrefix.ifEmpty { idPrefix }.length
             val snippetDesc = SnippetDescription(prefixLen, dynamicEmmet.parsedCodeSnippet, true)
             val item = SimpleSnippetCompletionItem(dynamicEmmet.label, dynamicEmmet.description, snippetDesc).apply {
+                this.prefixLength = prefixLen
                 kind(CompletionItemKind.Snippet)
                 this.detail = "Emmet"
                 this.sortText = "01_${dynamicEmmet.trigger}"
@@ -265,9 +304,11 @@ object SnippetManager {
                 val kwLower = kw.lowercase()
                 if (kwLower.startsWith(matchId)) {
                     if (!seenLabels.contains(kwLower)) {
+                        val isExact = kwLower == matchId
+                        val rank = if (isExact) "10" else "11"
                         val item = SimpleCompletionItem(kw, "Keyword", idPrefix.length, kw).apply {
                             kind(CompletionItemKind.Keyword)
-                            this.sortText = "10_$kw"
+                            this.sortText = "${rank}_$kw"
                         }
                         items.add(item)
                         seenLabels.add(kwLower)
@@ -283,9 +324,11 @@ object SnippetManager {
             for (id in identifierList) {
                 val idLower = id.lowercase()
                 if (!seenLabels.contains(idLower)) {
+                    val isExact = idLower == matchId
+                    val rank = if (isExact) "20" else "21"
                     val item = SimpleCompletionItem(id, "Identifier", idPrefix.length, id).apply {
                         kind(CompletionItemKind.Identifier)
-                        this.sortText = "20_$id"
+                        this.sortText = "${rank}_$id"
                     }
                     items.add(item)
                     seenLabels.add(idLower)
@@ -611,5 +654,45 @@ object SnippetManager {
         )
         snippetRegistry["source.shell"] = shSnippets
         snippetRegistry["source.bash"] = shSnippets
+
+        // ==========================================
+        // JAVA SNIPPETS
+        // ==========================================
+        val javaSnippets = listOf(
+            Snippet("main", "main", "main method", "public static void main(String[] args) {\n\t$0\n}"),
+            Snippet("sout", "sout", "System.out.println", "System.out.println($0);"),
+            Snippet("serr", "serr", "System.err.println", "System.err.println($0);"),
+            Snippet("for", "for", "For loop", "for (int \${1:i} = 0; \${1:i} < \${2:n}; \${1:i}++) {\n\t$0\n}"),
+            Snippet("fore", "fore", "For-each loop", "for (\${1:Object} \${2:item} : \${3:collection}) {\n\t$0\n}"),
+            Snippet("if", "if", "If statement", "if (\${1:condition}) {\n\t$0\n}"),
+            Snippet("ife", "ife", "If-Else statement", "if (\${1:condition}) {\n\t\${2}\n} else {\n\t$0\n}"),
+            Snippet("try", "try", "Try-Catch block", "try {\n\t$0\n} catch (\${1:Exception} \${2:e}) {\n\t\${2:e}.printStackTrace();\n}"),
+            Snippet("class", "class", "Class declaration", "public class \${1:ClassName} {\n\t$0\n}"),
+            Snippet("iface", "iface", "Interface declaration", "public interface \${1:InterfaceName} {\n\t$0\n}"),
+            Snippet("psf", "psf", "public static final", "public static final \${1:String} \${2:NAME} = \${3:value};"),
+            Snippet("psvm", "psvm", "main method", "public static void main(String[] args) {\n\t$0\n}")
+        )
+        snippetRegistry["source.java"] = javaSnippets
+
+        // ==========================================
+        // C & C++ SNIPPETS
+        // ==========================================
+        val cSnippets = listOf(
+            Snippet("main", "main", "int main", "int main(int argc, char *argv[]) {\n\t$0\n\treturn 0;\n}"),
+            Snippet("inc", "inc", "#include", "#include <\${1:stdio.h}>"),
+            Snippet("inci", "inci", "#include <iostream>", "#include <iostream>\n"),
+            Snippet("pr", "pr", "printf", "printf(\"\${1:%s}\\n\", $0);"),
+            Snippet("cout", "cout", "std::cout", "std::cout << $0 << std::endl;"),
+            Snippet("cin", "cin", "std::cin", "std::cin >> $0;"),
+            Snippet("for", "for", "For loop", "for (int \${1:i} = 0; \${1:i} < \${2:n}; \${1:i}++) {\n\t$0\n}"),
+            Snippet("if", "if", "If statement", "if (\${1:condition}) {\n\t$0\n}"),
+            Snippet("ife", "ife", "If-Else statement", "if (\${1:condition}) {\n\t\${2}\n} else {\n\t$0\n}"),
+            Snippet("struct", "struct", "Struct declaration", "struct \${1:Name} {\n\t$0\n};"),
+            Snippet("class", "class", "Class declaration", "class \${1:ClassName} {\npublic:\n\t\${1:ClassName}();\n\t~$0();\n};"),
+            Snippet("vec", "vec", "std::vector", "std::vector<\${1:int}> \${2:v};")
+        )
+        snippetRegistry["source.c"] = cSnippets
+        snippetRegistry["source.cpp"] = cSnippets
+        snippetRegistry["source.c++"] = cSnippets
     }
 }

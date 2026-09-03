@@ -51,7 +51,7 @@ RUN if [ -n "$RELEASE_KEYSTORE_BASE64" ] && [ -n "$RELEASE_PROPERTIES_BASE64" ];
     if [ ! -f soraX/editor/build.gradle.kts ]; then \
         echo "soraX submodule not found locally, cloning dynamically..." && \
         rm -rf soraX && \
-        git clone --recursive https://github.com/RohitKushvaha01/soraX.git soraX; \
+        git clone --recursive https://github.com/abidhasansojib/soraX.git soraX; \
     fi && \
     chmod +x gradlew && \
     ./gradlew ${BUILD_TASK} --no-daemon

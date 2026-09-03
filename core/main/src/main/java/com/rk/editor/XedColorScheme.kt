@@ -78,7 +78,6 @@ class XedColorScheme(
                 onSurface,
                 TEXT_ACTION_WINDOW_ICON_COLOR,
                 COMPLETION_WND_TEXT_PRIMARY,
-                COMPLETION_WND_TEXT_SECONDARY,
                 DIAGNOSTIC_TOOLTIP_BRIEF_MSG,
                 DIAGNOSTIC_TOOLTIP_DETAILED_MSG,
                 SIGNATURE_TEXT_NORMAL,
@@ -88,6 +87,7 @@ class XedColorScheme(
                 LINE_NUMBER_PANEL_TEXT,
                 TEXT_INLAY_HINT_FOREGROUND,
             )
+            setColors(onSurface withAlpha 0.7f, COMPLETION_WND_TEXT_SECONDARY)
 
             setColors(handleColor, SELECTION_HANDLE)
             setColors(selectionBg, SELECTION_INSERT, MATCHED_TEXT_BACKGROUND, SELECTED_TEXT_BACKGROUND)

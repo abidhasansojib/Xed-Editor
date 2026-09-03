@@ -116,6 +116,16 @@
     * **Chunked Batch Deletions:** Replaced single-item deletion loops with batch `deleteByPaths(chunk)` queries, preventing SQLite parameter overflows and transaction lock timeouts.
     * **Migration Resilience:** Enabled `fallbackToDestructiveMigration()` on `IndexDatabase` for clean automatic recovery on schema upgrades.
 
+18. **Code Autocomplete & Suggestion Dialog Overhaul (`EditorAutoCompletion.java`, `DefaultCompletionLayout.java`, `DefaultCompletionItemAdapter.java`, `SnippetManager.kt`, `comparators.kt` & `KeywordManager.kt`):**
+    * **Typing Debounce Protection:** Resolved critical bug where typing faster than 70ms between keystrokes dropped completion requests entirely without scheduling delayed execution. Replaced with an adaptive debounce runnable ensuring suggestions trigger reliably when typing pauses.
+    * **Instant Snappy Display:** Replaced artificial 70ms lifecycle post delay in `show()` with 16ms (single vsync frame) for instantaneous, lag-free popup presentation.
+    * **Smart Bi-Directional Dialog Placement:** Implemented viewport-aware positioning that flips the autocomplete dialog above the cursor line when space below is cramped (<120dp) by mobile soft keyboards, and added right-edge margin boundaries to stop popup truncation and premature dismissal.
+    * **Eliminated Janky MotionEvent Loop:** Removed legacy while-loop in `DefaultCompletionLayout` that dispatched synthetic touch events up to 100 times during list navigation; replaced with native $O(1)$ ListView selection positioning, eliminating scroll lag and ANR risks.
+    * **Adapter Performance & ViewHolder:** Replaced repetitive 4x `findViewById` on every row scroll with `ViewHolder` caching in `DefaultCompletionItemAdapter`.
+    * **Kind Icon Fallback & Material 3 Styling:** Added automatic kind icon badge rendering (`SimpleCompletionIconDrawer.draw(kind)`) for Snippets, Keywords, and Identifiers, rounded selection highlights (6dp), 12dp card corner radius with 8dp elevation shadow on `DefaultCompletionLayout`, monospaced typography, and removed obsolete placeholder assets.
+    * **Operator Delimiter & Prefix Bug Fix:** Fixed prefix computation in `SnippetManager` where operators like `=`, `+`, `*`, `[`, `{` were erroneously included in autocomplete prefixes (e.g. `x=for` -> `=for`), breaking snippet and keyword matching.
+    * **Exact Match Priority & Multi-Language Snippets:** Prioritized exact matches (`"00_"`, `"10_"`, `"20_"`) over partial matches in sorting. Added built-in Java and C/C++ snippet packs, comprehensive scope aliasing, and prefix label highlight support in `highlightMatchLabel`.
+
 ---
 
 ### 📋 What's Next (Upcoming Priorities)

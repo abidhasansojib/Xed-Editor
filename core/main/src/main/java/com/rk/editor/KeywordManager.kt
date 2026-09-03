@@ -150,12 +150,26 @@ object KeywordManager {
     private val SCOPE_FALLBACKS: Map<String, String> = mapOf(
         "source.tsx" to "source.ts",
         "source.js.jsx" to "source.js",
+        "source.jsx" to "source.js",
+        "source.mjs" to "source.js",
+        "source.cjs" to "source.js",
         "text.html.htmx" to "text.html.basic",
         "text.html.php" to "text.html.basic",
+        "text.html.derivative" to "text.html.basic",
         "source.css.scss" to "source.css",
         "source.css.less" to "source.css",
         "source.shell.bash" to "source.shell",
         "source.shell.zsh" to "source.shell",
+        "source.bash" to "source.shell",
+        "source.zsh" to "source.shell",
+        "source.sh" to "source.shell",
+        "source.c++" to "source.cpp",
+        "source.h" to "source.c",
+        "source.hpp" to "source.cpp",
+        "source.kt" to "source.kotlin",
+        "source.py" to "source.python",
+        "source.rs" to "source.rust",
+        "source.golang" to "source.go",
     )
 
     suspend fun initKeywordRegistry(context: Context) {
