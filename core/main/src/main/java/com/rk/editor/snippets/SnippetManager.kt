@@ -522,6 +522,7 @@ object SnippetManager {
         )
         snippetRegistry["source.c"] = cSnippets
         snippetRegistry["source.cpp"] = cppSnippets
+        snippetRegistry["source.c++"] = cppSnippets
 
         // ==========================================
         // JAVA SNIPPETS
@@ -654,45 +655,5 @@ object SnippetManager {
         )
         snippetRegistry["source.shell"] = shSnippets
         snippetRegistry["source.bash"] = shSnippets
-
-        // ==========================================
-        // JAVA SNIPPETS
-        // ==========================================
-        val javaSnippets = listOf(
-            Snippet("main", "main", "main method", "public static void main(String[] args) {\n\t$0\n}"),
-            Snippet("sout", "sout", "System.out.println", "System.out.println($0);"),
-            Snippet("serr", "serr", "System.err.println", "System.err.println($0);"),
-            Snippet("for", "for", "For loop", "for (int \${1:i} = 0; \${1:i} < \${2:n}; \${1:i}++) {\n\t$0\n}"),
-            Snippet("fore", "fore", "For-each loop", "for (\${1:Object} \${2:item} : \${3:collection}) {\n\t$0\n}"),
-            Snippet("if", "if", "If statement", "if (\${1:condition}) {\n\t$0\n}"),
-            Snippet("ife", "ife", "If-Else statement", "if (\${1:condition}) {\n\t\${2}\n} else {\n\t$0\n}"),
-            Snippet("try", "try", "Try-Catch block", "try {\n\t$0\n} catch (\${1:Exception} \${2:e}) {\n\t\${2:e}.printStackTrace();\n}"),
-            Snippet("class", "class", "Class declaration", "public class \${1:ClassName} {\n\t$0\n}"),
-            Snippet("iface", "iface", "Interface declaration", "public interface \${1:InterfaceName} {\n\t$0\n}"),
-            Snippet("psf", "psf", "public static final", "public static final \${1:String} \${2:NAME} = \${3:value};"),
-            Snippet("psvm", "psvm", "main method", "public static void main(String[] args) {\n\t$0\n}")
-        )
-        snippetRegistry["source.java"] = javaSnippets
-
-        // ==========================================
-        // C & C++ SNIPPETS
-        // ==========================================
-        val cSnippets = listOf(
-            Snippet("main", "main", "int main", "int main(int argc, char *argv[]) {\n\t$0\n\treturn 0;\n}"),
-            Snippet("inc", "inc", "#include", "#include <\${1:stdio.h}>"),
-            Snippet("inci", "inci", "#include <iostream>", "#include <iostream>\n"),
-            Snippet("pr", "pr", "printf", "printf(\"\${1:%s}\\n\", $0);"),
-            Snippet("cout", "cout", "std::cout", "std::cout << $0 << std::endl;"),
-            Snippet("cin", "cin", "std::cin", "std::cin >> $0;"),
-            Snippet("for", "for", "For loop", "for (int \${1:i} = 0; \${1:i} < \${2:n}; \${1:i}++) {\n\t$0\n}"),
-            Snippet("if", "if", "If statement", "if (\${1:condition}) {\n\t$0\n}"),
-            Snippet("ife", "ife", "If-Else statement", "if (\${1:condition}) {\n\t\${2}\n} else {\n\t$0\n}"),
-            Snippet("struct", "struct", "Struct declaration", "struct \${1:Name} {\n\t$0\n};"),
-            Snippet("class", "class", "Class declaration", "class \${1:ClassName} {\npublic:\n\t\${1:ClassName}();\n\t~$0();\n};"),
-            Snippet("vec", "vec", "std::vector", "std::vector<\${1:int}> \${2:v};")
-        )
-        snippetRegistry["source.c"] = cSnippets
-        snippetRegistry["source.cpp"] = cSnippets
-        snippetRegistry["source.c++"] = cSnippets
     }
 }
